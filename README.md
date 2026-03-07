@@ -74,6 +74,8 @@ index 1111111..2222222 100644
 ./codew --host http://host.docker.internal:11434 --model qwen2.5-coder:14b --auto-approve
 ```
 
+編集系ツール（`write_file`, `replace_in_file`, `apply_patch`）は、承認プロンプト前に変更内容プレビューを表示します。
+
 ## Notes
 
 - ファイル操作は `--workspace` 配下に制限しています。

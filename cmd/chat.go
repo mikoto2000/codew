@@ -108,7 +108,11 @@ func runChat(cmd *cobra.Command, _ []string) error {
 
 				for _, call := range toolCalls {
 					if !approveAll {
-						approved, allowAll := askToolApproval(reader, call)
+						preview := ""
+						if tools.IsMutatingTool(call.Function.Name) {
+							preview = tools.Preview(call)
+						}
+						approved, allowAll := askToolApproval(reader, call, preview)
 						if allowAll {
 							approveAll = true
 						}
@@ -148,8 +152,11 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	}
 }
 
-func askToolApproval(reader *bufio.Reader, call ollama.ToolCall) (approved bool, allowAll bool) {
+func askToolApproval(reader *bufio.Reader, call ollama.ToolCall, preview string) (approved bool, allowAll bool) {
 	args := compactJSON(call.Function.Arguments)
+	if preview != "" {
+		fmt.Printf("\n[tool:%s preview]\n%s\n", call.Function.Name, preview)
+	}
 	fmt.Printf("approve tool %s args=%s ? [y/N/a]: ", call.Function.Name, args)
 	line, _ := reader.ReadString('\n')
 	switch strings.ToLower(strings.TrimSpace(line)) {
