@@ -8,6 +8,12 @@ type Session struct {
 	history []ollama.Message
 }
 
+type Snapshot struct {
+	Model   string           `json:"model"`
+	System  string           `json:"system"`
+	History []ollama.Message `json:"history"`
+}
+
 func New(model, system string) *Session {
 	s := &Session{Model: model, System: system}
 	s.Reset()
@@ -50,4 +56,23 @@ func (s *Session) Messages() []ollama.Message {
 	out := make([]ollama.Message, len(s.history))
 	copy(out, s.history)
 	return out
+}
+
+func (s *Session) Snapshot() Snapshot {
+	return Snapshot{
+		Model:   s.Model,
+		System:  s.System,
+		History: s.Messages(),
+	}
+}
+
+func (s *Session) Restore(snap Snapshot) {
+	s.Model = snap.Model
+	s.System = snap.System
+	if len(snap.History) == 0 {
+		s.Reset()
+		return
+	}
+	s.history = make([]ollama.Message, len(snap.History))
+	copy(s.history, snap.History)
 }

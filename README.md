@@ -24,6 +24,9 @@ go build -o codew .
 - `--auto-approve` (default: `false`)
 - `--workspace` (default: `.`)
 - `--max-tool-steps` (default: `8`)
+- `--session-file` (default: `.codew/session.json`)
+- `--resume` (default: `false`)
+- `--auto-save` (default: `true`)
 
 ## Environment Variables
 
@@ -37,6 +40,8 @@ go build -o codew .
 - `/model <name>`
 - `/system <text>`
 - `/reset`
+- `/save`
+- `/load`
 - `/exit` or `/quit`
 
 ## Tool Calling
@@ -75,6 +80,12 @@ index 1111111..2222222 100644
 ```
 
 編集系ツール（`write_file`, `replace_in_file`, `apply_patch`）は、承認プロンプト前に変更内容プレビューを表示します。
+
+## Session Persistence
+
+- `--auto-save=true` の場合、各ターン後に `--session-file` へ履歴を保存します。
+- `--resume` を指定すると起動時に `--session-file` を読み込みます。
+- チャット中でも `/save` と `/load` で明示的に保存・復元できます。
 
 ## Notes
 

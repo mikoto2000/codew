@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -39,8 +40,21 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	sessionPath, err := filepath.Abs(sessionFile)
+	if err != nil {
+		return fmt.Errorf("resolve session-file: %w", err)
+	}
 
 	s := session.New(chatModel, buildSystemPrompt(systemText, toolsEnabled))
+	if resumeSession {
+		snap, loadErr := session.LoadFromFile(sessionPath)
+		if loadErr != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to resume session: %v\n", loadErr)
+		} else {
+			s.Restore(snap)
+			fmt.Printf("Resumed session from %s\n", sessionPath)
+		}
+	}
 	toolDefs := []ollama.ToolDefinition(nil)
 	allowed := map[string]struct{}{}
 	if toolsEnabled {
@@ -51,7 +65,8 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	fmt.Printf("Connected target: %s\n", chatHost)
 	fmt.Printf("Model: %s\n", s.Model)
 	fmt.Printf("Tools: %t (auto-approve=%t)\n", toolsEnabled, autoApprove)
-	fmt.Println("Commands: /exit, /model <name>, /system <text>, /reset, /help")
+	fmt.Printf("Session file: %s (auto-save=%t)\n", sessionPath, autoSave)
+	fmt.Println("Commands: /exit, /model <name>, /system <text>, /reset, /save, /load, /help")
 
 	reader := bufio.NewReader(os.Stdin)
 	approveAll := autoApprove
@@ -74,9 +89,13 @@ func runChat(cmd *cobra.Command, _ []string) error {
 		}
 
 		if strings.HasPrefix(line, "/") {
-			done, cmdErr := runCommand(line, s)
+			done, cmdErr := runCommand(line, s, sessionPath)
 			if cmdErr != nil {
 				fmt.Fprintf(os.Stderr, "command error: %v\n", cmdErr)
+			} else if autoSave {
+				if saveErr := saveSessionSnapshot(sessionPath, s); saveErr != nil {
+					fmt.Fprintf(os.Stderr, "warning: auto-save failed: %v\n", saveErr)
+				}
 			}
 			if done {
 				return nil
@@ -149,6 +168,11 @@ func runChat(cmd *cobra.Command, _ []string) error {
 			fmt.Print("(no response)")
 		}
 		fmt.Println()
+		if autoSave {
+			if saveErr := saveSessionSnapshot(sessionPath, s); saveErr != nil {
+				fmt.Fprintf(os.Stderr, "warning: auto-save failed: %v\n", saveErr)
+			}
+		}
 	}
 }
 
@@ -180,7 +204,7 @@ func compactJSON(raw json.RawMessage) string {
 	return out.String()
 }
 
-func runCommand(line string, s *session.Session) (bool, error) {
+func runCommand(line string, s *session.Session, sessionPath string) (bool, error) {
 	parts := strings.SplitN(line, " ", 2)
 	name := parts[0]
 	arg := ""
@@ -215,10 +239,30 @@ func runCommand(line string, s *session.Session) (bool, error) {
 		fmt.Println("/model <name>  : switch model")
 		fmt.Println("/system <text> : change system prompt and reset history")
 		fmt.Println("/reset         : clear chat history")
+		fmt.Println("/save          : save current session file")
+		fmt.Println("/load          : load current session file")
+		return false, nil
+	case "/save":
+		if err := saveSessionSnapshot(sessionPath, s); err != nil {
+			return false, err
+		}
+		fmt.Printf("session saved: %s\n", sessionPath)
+		return false, nil
+	case "/load":
+		snap, err := session.LoadFromFile(sessionPath)
+		if err != nil {
+			return false, err
+		}
+		s.Restore(snap)
+		fmt.Printf("session loaded: %s\n", sessionPath)
 		return false, nil
 	default:
 		return false, fmt.Errorf("unknown command: %s", name)
 	}
+}
+
+func saveSessionSnapshot(path string, s *session.Session) error {
+	return session.SaveToFile(path, s.Snapshot())
 }
 
 func buildSystemPrompt(base string, enableTools bool) string {

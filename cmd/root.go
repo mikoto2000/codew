@@ -15,6 +15,9 @@ var (
 	autoApprove   bool
 	workspaceRoot string
 	maxToolSteps  int
+	sessionFile   string
+	resumeSession bool
+	autoSave      bool
 )
 
 var rootCmd = &cobra.Command{
@@ -39,6 +42,9 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&autoApprove, "auto-approve", false, "Auto-approve all tool calls")
 	rootCmd.PersistentFlags().StringVar(&workspaceRoot, "workspace", ".", "Workspace root for tool access")
 	rootCmd.PersistentFlags().IntVar(&maxToolSteps, "max-tool-steps", 8, "Max tool-calling rounds per user turn")
+	rootCmd.PersistentFlags().StringVar(&sessionFile, "session-file", ".codew/session.json", "Path for session save/load")
+	rootCmd.PersistentFlags().BoolVar(&resumeSession, "resume", false, "Load previous session from session-file on startup")
+	rootCmd.PersistentFlags().BoolVar(&autoSave, "auto-save", true, "Auto-save session after each turn")
 
 	rootCmd.AddCommand(chatCmd)
 }
