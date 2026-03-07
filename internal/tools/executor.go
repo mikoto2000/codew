@@ -44,6 +44,7 @@ func Definitions() []ollama.ToolDefinition {
 						"command":     map[string]any{"type": "string"},
 						"workdir":     map[string]any{"type": "string"},
 						"timeout_sec": map[string]any{"type": "integer", "minimum": 1, "maximum": 300},
+						"pty":         map[string]any{"type": "boolean"},
 					},
 					"required": []string{"command"},
 				},
@@ -180,6 +181,7 @@ type shellArgs struct {
 	Command    string `json:"command"`
 	Workdir    string `json:"workdir"`
 	TimeoutSec int    `json:"timeout_sec"`
+	PTY        bool   `json:"pty"`
 }
 
 func (e *Executor) shellExec(raw json.RawMessage) (map[string]any, error) {
@@ -206,7 +208,13 @@ func (e *Executor) shellExec(raw json.RawMessage) (map[string]any, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(in.TimeoutSec)*time.Second)
 	defer cancel()
 
-	c := exec.CommandContext(ctx, "bash", "-lc", in.Command)
+	var c *exec.Cmd
+	if in.PTY {
+		// Use util-linux "script" for pseudo-TTY execution.
+		c = exec.CommandContext(ctx, "script", "-qec", in.Command, "/dev/null")
+	} else {
+		c = exec.CommandContext(ctx, "bash", "-lc", in.Command)
+	}
 	c.Dir = dir
 	var stdout, stderr bytes.Buffer
 	c.Stdout = &stdout
@@ -216,6 +224,7 @@ func (e *Executor) shellExec(raw json.RawMessage) (map[string]any, error) {
 	out := map[string]any{
 		"workdir": dir,
 		"command": in.Command,
+		"pty":     in.PTY,
 		"stdout":  truncate(stdout.String()),
 		"stderr":  truncate(stderr.String()),
 	}

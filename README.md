@@ -51,7 +51,7 @@ go build -o codew .
 `--tools=true` の場合、モデルがツール呼び出し JSON を返すとローカルで実行し、結果をモデルへ返送します。
 
 対応ツール:
-- `shell_exec` (`command`, `workdir`, `timeout_sec`)
+- `shell_exec` (`command`, `workdir`, `timeout_sec`, `pty`)
 - `list_files` (`path`, `pattern`, `max_results`)
 - `read_file` (`path`)
 - `write_file` (`path`, `content`)
@@ -99,6 +99,11 @@ index 1111111..2222222 100644
 - `read-only`: `list_files`, `read_file`
 - `workspace-write`: 上記 + `write_file`, `replace_in_file`, `apply_patch`
 - `full`: すべてのツール（`shell_exec` など）
+
+## PTY Execution
+
+- `shell_exec` は `pty=true` を指定すると擬似TTYでコマンド実行します。
+- 対話系ツールやTTY前提のコマンドで利用できます。
 
 ## Notes
 
