@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
 )
 
 var (
+	appVersion       = "dev"
 	chatHost         string
 	chatModel        string
 	systemText       string
@@ -33,12 +36,20 @@ var (
 	toolLog          bool
 	toolLogFile      string
 	modelProfile     string
+	showVersion      bool
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "codew",
 	Short: "Codex CLI style client for Ollama",
 	Long:  "A Codex CLI-style assistant that talks to an Ollama server via /api/chat.",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if showVersion {
+			fmt.Println(appVersion)
+			os.Exit(0)
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runChat(cmd, args)
 	},
@@ -75,6 +86,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&toolLog, "tool-log", true, "Write tool execution logs in JSONL format")
 	rootCmd.PersistentFlags().StringVar(&toolLogFile, "tool-log-file", ".codew/tool_logs.jsonl", "Path to tool execution JSONL log file")
 	rootCmd.PersistentFlags().StringVar(&modelProfile, "model-profile", "", "Preset profile: coding-fast | coding-safe | research")
+	rootCmd.PersistentFlags().BoolVar(&showVersion, "version", false, "Show version and exit")
 
 	rootCmd.AddCommand(chatCmd)
 	rootCmd.AddCommand(runCmd)
