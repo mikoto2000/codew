@@ -132,7 +132,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	fmt.Printf("Trace log: %t (%s)\n", traceLog, tracePath)
 	fmt.Printf("Retries: %d (backoff=%s, fallback=%s)\n", retries, retryBackoff, fallbackModel)
 	fmt.Printf("Session file: %s (auto-save=%t)\n", sessionPath, autoSave)
-	fmt.Println("Commands: /exit, /model <name>, /system <text>, /reset, /save, /load, /checkpoint, /undo, /help")
+	fmt.Println("Commands: /exit, /model <name>, /models, /system <text>, /reset, /save, /load, /checkpoint, /undo, /help")
 
 	lineEditor := liner.NewLiner()
 	defer lineEditor.Close()
@@ -174,7 +174,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 		lineEditor.AppendHistory(line)
 
 		if strings.HasPrefix(line, "/") {
-			done, cmdErr := runCommand(line, s, sessionPath, checkpoints, planner)
+			done, cmdErr := runCommand(cmd.Context(), line, s, sessionPath, checkpoints, planner, client)
 			if cmdErr != nil {
 				fmt.Fprintf(os.Stderr, "command error: %v\n", cmdErr)
 			} else if autoSave {
@@ -396,7 +396,7 @@ func compactJSON(raw json.RawMessage) string {
 	return out.String()
 }
 
-func runCommand(line string, s *session.Session, sessionPath string, checkpoints *checkpoint.Manager, planner *plan.State) (bool, error) {
+func runCommand(ctx context.Context, line string, s *session.Session, sessionPath string, checkpoints *checkpoint.Manager, planner *plan.State, client *ollama.Client) (bool, error) {
 	parts := strings.SplitN(line, " ", 2)
 	name := parts[0]
 	arg := ""
@@ -418,6 +418,26 @@ func runCommand(line string, s *session.Session, sessionPath string, checkpoints
 		s.Model = arg
 		fmt.Printf("model changed to: %s\n", s.Model)
 		return false, nil
+	case "/models":
+		reqCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		models, err := client.ListModels(reqCtx)
+		if err != nil {
+			return false, err
+		}
+		if len(models) == 0 {
+			fmt.Println("no models found")
+			return false, nil
+		}
+		fmt.Println("available models:")
+		for _, m := range models {
+			marker := " "
+			if m.Name == s.Model {
+				marker = "*"
+			}
+			fmt.Printf("%s %s\n", marker, m.Name)
+		}
+		return false, nil
 	case "/system":
 		if arg == "" {
 			return false, errors.New("usage: /system <text>")
@@ -429,6 +449,7 @@ func runCommand(line string, s *session.Session, sessionPath string, checkpoints
 	case "/help":
 		fmt.Println("/exit | /quit  : end session")
 		fmt.Println("/model <name>  : switch model")
+		fmt.Println("/models        : list available models")
 		fmt.Println("/system <text> : change system prompt and reset history")
 		fmt.Println("/reset         : clear chat history")
 		fmt.Println("/save          : save current session file")

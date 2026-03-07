@@ -58,11 +58,44 @@ type Client struct {
 	http *http.Client
 }
 
+type tagsResponse struct {
+	Models []ModelInfo `json:"models"`
+}
+
+type ModelInfo struct {
+	Name string `json:"name"`
+}
+
 func NewClient(host string, timeout time.Duration) *Client {
 	return &Client{
 		host: strings.TrimRight(host, "/"),
 		http: &http.Client{Timeout: timeout},
 	}
+}
+
+func (c *Client) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	url := c.host + "/api/tags"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 8*1024))
+		return nil, fmt.Errorf("ollama status %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	}
+
+	var out tagsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return out.Models, nil
 }
 
 func (c *Client) Chat(ctx context.Context, model string, messages []Message, tools []ToolDefinition) (Message, error) {
