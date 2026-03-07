@@ -13,6 +13,7 @@ import (
 	"ollama-codex-cli/internal/checkpoint"
 	"ollama-codex-cli/internal/contextloader"
 	"ollama-codex-cli/internal/logging"
+	"ollama-codex-cli/internal/mcp"
 	"ollama-codex-cli/internal/modelprofile"
 	"ollama-codex-cli/internal/ollama"
 	"ollama-codex-cli/internal/session"
@@ -44,7 +45,17 @@ func runOnce(cmd *cobra.Command, args []string) error {
 	}
 	profile := tools.NormalizeProfile(toolProfile)
 	client := ollama.NewClient(chatHost, timeout)
-	executor, err := tools.NewExecutor(workspaceAbs, profile, dryRun)
+	mcpManager := mcp.NewManager()
+	if mcpEnabled {
+		mcpCtx, cancelMCP := context.WithTimeout(cmd.Context(), timeout)
+		err = mcpManager.LoadAndStart(mcpCtx, workspaceAbs, mcpConfig)
+		cancelMCP()
+		if err != nil {
+			return fmt.Errorf("load mcp tools: %w", err)
+		}
+		defer mcpManager.Close()
+	}
+	executor, err := tools.NewExecutor(workspaceAbs, profile, dryRun, mcpManager)
 	if err != nil {
 		return err
 	}
@@ -71,7 +82,11 @@ func runOnce(cmd *cobra.Command, args []string) error {
 	allowed := map[string]struct{}{}
 	if toolsEnabled {
 		toolDefs = tools.DefinitionsForProfile(profile)
+		toolDefs = append(toolDefs, mcpManager.Definitions()...)
 		allowed = tools.AllowedToolNamesForProfile(profile)
+		for _, def := range mcpManager.Definitions() {
+			allowed[def.Function.Name] = struct{}{}
+		}
 	}
 
 	checkpointed := false

@@ -48,6 +48,8 @@ go build -o codew .
 - `--tool-log` (default: `true`)
 - `--tool-log-file` (default: `.codew/tool_logs.jsonl`)
 - `--model-profile` (default: empty, `coding-fast` | `coding-safe` | `research`)
+- `--mcp` (default: `false`)
+- `--mcp-config` (default: `.codew/mcp.json`)
 
 ## Environment Variables
 
@@ -203,6 +205,28 @@ codew run "このリポジトリで TODO の進め方を提案して"
 
 - CI やスクリプト向けに 1 プロンプト実行して終了します。
 - 通常のツール呼び出しループ（`max-tool-steps` まで）も利用します。
+
+## MCP Client (stdio)
+
+- `--mcp` を有効にすると `.codew/mcp.json` の MCP サーバーを起動し、`tools/list` の結果を `mcp.<server>.<tool>` として公開します。
+- MCP ツール実行は `tools/call` へ中継されます。
+- 安全のため MCP ツールは `--tool-profile full` でのみ実行可能です。
+
+設定例 (`.codew/mcp.json`):
+
+```json
+{
+  "servers": [
+    {
+      "name": "example",
+      "command": "node",
+      "args": ["./mcp-server.js"],
+      "env": {},
+      "cwd": "."
+    }
+  ]
+}
+```
 
 ## Notes
 

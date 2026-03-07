@@ -37,6 +37,8 @@ var (
 	toolLogFile      string
 	modelProfile     string
 	showVersion      bool
+	mcpEnabled       bool
+	mcpConfig        string
 )
 
 var rootCmd = &cobra.Command{
@@ -87,6 +89,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&toolLogFile, "tool-log-file", ".codew/tool_logs.jsonl", "Path to tool execution JSONL log file")
 	rootCmd.PersistentFlags().StringVar(&modelProfile, "model-profile", "", "Preset profile: coding-fast | coding-safe | research")
 	rootCmd.PersistentFlags().BoolVar(&showVersion, "version", false, "Show version and exit")
+	rootCmd.PersistentFlags().BoolVar(&mcpEnabled, "mcp", false, "Enable MCP client tools from config")
+	rootCmd.PersistentFlags().StringVar(&mcpConfig, "mcp-config", ".codew/mcp.json", "Path to MCP server config JSON")
 
 	rootCmd.AddCommand(chatCmd)
 	rootCmd.AddCommand(runCmd)

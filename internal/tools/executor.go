@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"ollama-codex-cli/internal/mcp"
 	"ollama-codex-cli/internal/ollama"
 )
 
@@ -25,14 +26,15 @@ type Executor struct {
 	workspace string
 	profile   string
 	dryRun    bool
+	mcp       *mcp.Manager
 }
 
-func NewExecutor(workspace string, profile string, dryRun bool) (*Executor, error) {
+func NewExecutor(workspace string, profile string, dryRun bool, mcpManager *mcp.Manager) (*Executor, error) {
 	abs, err := filepath.Abs(workspace)
 	if err != nil {
 		return nil, fmt.Errorf("resolve workspace: %w", err)
 	}
-	return &Executor{workspace: abs, profile: NormalizeProfile(profile), dryRun: dryRun}, nil
+	return &Executor{workspace: abs, profile: NormalizeProfile(profile), dryRun: dryRun, mcp: mcpManager}, nil
 }
 
 func Definitions() []ollama.ToolDefinition {
@@ -154,6 +156,26 @@ func AllowedToolNames() map[string]struct{} {
 
 func (e *Executor) Execute(call ollama.ToolCall) string {
 	result := map[string]any{"tool": call.Function.Name}
+	if e.mcp != nil && e.mcp.HasTool(call.Function.Name) {
+		if e.profile != ProfileFull {
+			result["ok"] = false
+			result["error"] = fmt.Sprintf("mcp tool %q is allowed only in profile %q", call.Function.Name, ProfileFull)
+			data, _ := json.Marshal(result)
+			return string(data)
+		}
+		payload, err := e.mcp.Call(context.Background(), call.Function.Name, call.Function.Arguments)
+		if err != nil {
+			result["ok"] = false
+			result["error"] = err.Error()
+		} else {
+			result["ok"] = true
+			for k, v := range payload {
+				result[k] = v
+			}
+		}
+		data, _ := json.Marshal(result)
+		return string(data)
+	}
 	if !IsToolAllowed(e.profile, call.Function.Name) {
 		result["ok"] = false
 		result["error"] = fmt.Sprintf("tool %q is not allowed in profile %q", call.Function.Name, e.profile)
