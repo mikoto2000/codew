@@ -38,6 +38,7 @@ go build -o codew .
 - `--auto-context-files` (default: `4`)
 - `--auto-context-chars` (default: `8000`)
 - `--dry-run` (default: `false`)
+- `--auto-checkpoint` (default: `true`)
 
 ## Environment Variables
 
@@ -53,6 +54,8 @@ go build -o codew .
 - `/reset`
 - `/save`
 - `/load`
+- `/checkpoint`
+- `/undo`
 - `/exit` or `/quit`
 
 入力履歴ナビゲーション:
@@ -60,6 +63,9 @@ go build -o codew .
 - `Ctrl+P` / `Ctrl+N`
 
 履歴は `.codew/history.txt` に保存されます。
+
+`/checkpoint` は現在状態のスナップショットを `.codew/checkpoints` に作成し、`/undo` で最新チェックポイントへ戻せます。  
+`--auto-checkpoint=true` の場合、編集系ツールの実行前に自動チェックポイントを作成します。
 
 ## Tool Calling
 

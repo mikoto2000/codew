@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"ollama-codex-cli/internal/agent"
+	"ollama-codex-cli/internal/checkpoint"
 	"ollama-codex-cli/internal/contextloader"
 	"ollama-codex-cli/internal/ollama"
 	"ollama-codex-cli/internal/session"
@@ -48,6 +49,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	checkpoints := checkpoint.New(workspaceAbs)
 	sessionPath, err := filepath.Abs(sessionFile)
 	if err != nil {
 		return fmt.Errorf("resolve session-file: %w", err)
@@ -78,9 +80,10 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	fmt.Printf("Context limit: %d chars\n", maxContextChars)
 	fmt.Printf("Auto context: %t (files=%d chars=%d)\n", autoContext, autoContextFiles, autoContextChars)
 	fmt.Printf("Dry run: %t\n", dryRun)
+	fmt.Printf("Auto checkpoint: %t\n", autoCheckpoint)
 	fmt.Printf("Retries: %d (backoff=%s, fallback=%s)\n", retries, retryBackoff, fallbackModel)
 	fmt.Printf("Session file: %s (auto-save=%t)\n", sessionPath, autoSave)
-	fmt.Println("Commands: /exit, /model <name>, /system <text>, /reset, /save, /load, /help")
+	fmt.Println("Commands: /exit, /model <name>, /system <text>, /reset, /save, /load, /checkpoint, /undo, /help")
 
 	lineEditor := liner.NewLiner()
 	defer lineEditor.Close()
@@ -114,7 +117,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 		lineEditor.AppendHistory(line)
 
 		if strings.HasPrefix(line, "/") {
-			done, cmdErr := runCommand(line, s, sessionPath)
+			done, cmdErr := runCommand(line, s, sessionPath, checkpoints)
 			if cmdErr != nil {
 				fmt.Fprintf(os.Stderr, "command error: %v\n", cmdErr)
 			} else if autoSave {
@@ -144,6 +147,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 		fmt.Print("assistant> ")
 
 		finalPrinted := false
+		turnCheckpointed := false
 		for step := 0; step < maxToolSteps; step++ {
 			messages := withAutoContext(s.MessagesForModel(maxContextChars), autoCtx)
 			ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
@@ -185,6 +189,15 @@ func runChat(cmd *cobra.Command, _ []string) error {
 					}
 
 					fmt.Printf("\n[tool:%s] running...\n", call.Function.Name)
+					if autoCheckpoint && !turnCheckpointed && tools.IsMutatingTool(call.Function.Name) && !dryRun {
+						id, cpErr := checkpoints.Create()
+						if cpErr != nil {
+							fmt.Fprintf(os.Stderr, "[checkpoint] failed: %v\n", cpErr)
+						} else {
+							turnCheckpointed = true
+							fmt.Printf("[checkpoint] created: %s\n", id)
+						}
+					}
 					toolResult := executor.Execute(call)
 					s.AddTool(call.Function.Name, call.ID, toolResult)
 					fmt.Printf("[tool:%s] %s\n", call.Function.Name, summarizeToolResult(toolResult))
@@ -278,7 +291,7 @@ func compactJSON(raw json.RawMessage) string {
 	return out.String()
 }
 
-func runCommand(line string, s *session.Session, sessionPath string) (bool, error) {
+func runCommand(line string, s *session.Session, sessionPath string, checkpoints *checkpoint.Manager) (bool, error) {
 	parts := strings.SplitN(line, " ", 2)
 	name := parts[0]
 	arg := ""
@@ -315,6 +328,8 @@ func runCommand(line string, s *session.Session, sessionPath string) (bool, erro
 		fmt.Println("/reset         : clear chat history")
 		fmt.Println("/save          : save current session file")
 		fmt.Println("/load          : load current session file")
+		fmt.Println("/checkpoint    : create rollback checkpoint")
+		fmt.Println("/undo          : restore latest checkpoint")
 		return false, nil
 	case "/save":
 		if err := saveSessionSnapshot(sessionPath, s); err != nil {
@@ -329,6 +344,20 @@ func runCommand(line string, s *session.Session, sessionPath string) (bool, erro
 		}
 		s.Restore(snap)
 		fmt.Printf("session loaded: %s\n", sessionPath)
+		return false, nil
+	case "/checkpoint":
+		id, err := checkpoints.Create()
+		if err != nil {
+			return false, err
+		}
+		fmt.Printf("checkpoint created: %s\n", id)
+		return false, nil
+	case "/undo":
+		id, err := checkpoints.RestoreLatest()
+		if err != nil {
+			return false, err
+		}
+		fmt.Printf("restored checkpoint: %s\n", id)
 		return false, nil
 	default:
 		return false, fmt.Errorf("unknown command: %s", name)

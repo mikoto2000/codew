@@ -5,7 +5,7 @@
 - [x] `--dry-run`
   - 編集ツールを実適用せず、差分と実行計画のみ表示する
 
-- [ ] `undo` / `checkpoint`
+- [x] `undo` / `checkpoint`
   - 自動で git stash/commit 的な巻き戻しポイントを作る
 
 - [ ] ツール実行ログの JSONL 出力

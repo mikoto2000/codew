@@ -29,6 +29,7 @@ var (
 	autoContextFiles int
 	autoContextChars int
 	dryRun           bool
+	autoCheckpoint   bool
 )
 
 var rootCmd = &cobra.Command{
@@ -67,6 +68,7 @@ func init() {
 	rootCmd.PersistentFlags().IntVar(&autoContextFiles, "auto-context-files", 4, "Max number of files to auto-load as context per turn")
 	rootCmd.PersistentFlags().IntVar(&autoContextChars, "auto-context-chars", 8000, "Max total characters for auto-loaded context per turn")
 	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "Do not apply edit tools, only show edit plan")
+	rootCmd.PersistentFlags().BoolVar(&autoCheckpoint, "auto-checkpoint", true, "Create checkpoint before first edit tool in each turn")
 
 	rootCmd.AddCommand(chatCmd)
 }
