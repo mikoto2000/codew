@@ -111,8 +111,8 @@ func runOnce(cmd *cobra.Command, args []string) error {
 		if toolsEnabled && len(toolCalls) > 0 {
 			s.AddAssistantMessage(msg)
 			results := map[int]string{}
-			if canRunInParallel(toolCalls, sandbox, networkAllow, networkRules) {
-				parallel := runToolCallsParallel(executor, toolCalls, sandbox)
+			if canOrchestrateInParallel(toolCalls, sandbox, networkAllow, networkRules) {
+				parallel := runToolCallsOrchestrated(executor, toolCalls, sandbox)
 				for i, result := range parallel {
 					results[i] = result
 				}

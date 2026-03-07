@@ -216,8 +216,8 @@ func runChat(cmd *cobra.Command, _ []string) error {
 			if toolsEnabled && len(toolCalls) > 0 {
 				msg.ToolCalls = toolCalls
 				s.AddAssistantMessage(msg)
-				if canRunInParallel(toolCalls, sandbox, networkAllow, networkRules) {
-					results := runToolCallsParallel(executor, toolCalls, sandbox)
+				if canOrchestrateInParallel(toolCalls, sandbox, networkAllow, networkRules) {
+					results := runToolCallsOrchestrated(executor, toolCalls, sandbox)
 					for i, call := range toolCalls {
 						toolResult := results[i]
 						s.AddTool(call.Function.Name, call.ID, toolResult)
@@ -654,7 +654,7 @@ func withAutoContext(messages []ollama.Message, autoCtx string) []ollama.Message
 	return out
 }
 
-func canRunInParallel(calls []ollama.ToolCall, sandbox string, networkAllow bool, networkRules map[string]bool) bool {
+func canOrchestrateInParallel(calls []ollama.ToolCall, sandbox string, networkAllow bool, networkRules map[string]bool) bool {
 	if len(calls) < 2 {
 		return false
 	}
@@ -678,20 +678,90 @@ func isParallelSafeTool(name string) bool {
 	}
 }
 
-func runToolCallsParallel(executor *tools.Executor, calls []ollama.ToolCall, sandbox string) []string {
+func runToolCallsOrchestrated(executor *tools.Executor, calls []ollama.ToolCall, sandbox string) []string {
 	results := make([]string, len(calls))
-	var wg sync.WaitGroup
-	wg.Add(len(calls))
-	for i, call := range calls {
-		i := i
-		call := call
-		go func() {
-			defer wg.Done()
-			results[i] = executor.ExecuteWithSandbox(call, sandbox)
-		}()
+	done := make([]bool, len(calls))
+	remaining := len(calls)
+
+	for remaining > 0 {
+		ready := []int{}
+		for i, call := range calls {
+			if done[i] {
+				continue
+			}
+			if depsSatisfied(call, calls, done) {
+				ready = append(ready, i)
+			}
+		}
+		if len(ready) == 0 {
+			for i := range calls {
+				if !done[i] {
+					results[i] = `{"ok":false,"error":"orchestration deadlock: unresolved dependencies"}`
+					done[i] = true
+					remaining--
+				}
+			}
+			break
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(len(ready))
+		for _, idx := range ready {
+			idx := idx
+			go func() {
+				defer wg.Done()
+				results[idx] = executor.ExecuteWithSandbox(calls[idx], sandbox)
+			}()
+		}
+		wg.Wait()
+		for _, idx := range ready {
+			done[idx] = true
+			remaining--
+		}
 	}
-	wg.Wait()
 	return results
+}
+
+func depsSatisfied(call ollama.ToolCall, all []ollama.ToolCall, done []bool) bool {
+	deps := callDependencies(call)
+	if len(deps) == 0 {
+		return true
+	}
+	for _, dep := range deps {
+		found := false
+		for i, c := range all {
+			if done[i] && c.Function.Name == dep {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func callDependencies(call ollama.ToolCall) []string {
+	var obj map[string]any
+	if err := json.Unmarshal(call.Function.Arguments, &obj); err != nil {
+		return nil
+	}
+	raw, ok := obj["_depends_on"]
+	if !ok {
+		return nil
+	}
+	items, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	out := []string{}
+	for _, item := range items {
+		if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+			out = append(out, strings.TrimSpace(s))
+		}
+	}
+	return out
 }
 
 func needsNetworkEscalation(call ollama.ToolCall, mcpManager *mcp.Manager, sandbox string, allowAll bool, allowRules map[string]bool) bool {
