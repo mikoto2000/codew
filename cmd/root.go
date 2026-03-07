@@ -18,7 +18,7 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "ocli",
+	Use:   "codew",
 	Short: "Codex CLI style client for Ollama",
 	Long:  "A Codex CLI-style assistant that talks to an Ollama server via /api/chat.",
 	RunE: func(cmd *cobra.Command, args []string) error {

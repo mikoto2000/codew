@@ -1,17 +1,17 @@
-# ocli (Ollama Codex-like CLI)
+# codew (Ollama Codex-like CLI)
 
 Go で書いた、Codex CLI 風の対話 CLI です。接続先は Ollama API (`/api/chat`) です。
 
 ## Build
 
 ```bash
-go build -o ocli .
+go build -o codew .
 ```
 
 ## Run
 
 ```bash
-./ocli --host http://host.docker.internal:11434 --model qwen2.5-coder:14b
+./codew --host http://host.docker.internal:11434 --model qwen2.5-coder:14b
 ```
 
 ## Flags
@@ -53,7 +53,7 @@ go build -o ocli .
 ツール実行はデフォルトで都度承認です。全自動にする場合:
 
 ```bash
-./ocli --host http://host.docker.internal:11434 --model qwen2.5-coder:14b --auto-approve
+./codew --host http://host.docker.internal:11434 --model qwen2.5-coder:14b --auto-approve
 ```
 
 ## Notes
