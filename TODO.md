@@ -27,7 +27,7 @@
 - [x] 実行結果の構造化表示を追加する
   - `stdout/stderr/exit_code/duration` を見やすく表示する
 
-- [ ] 編集後のテスト・lint 自動実行モードを追加する
+- [x] 編集後のテスト・lint 自動実行モードを追加する
   - 例: `go test` / `golangci-lint` の自動実行
 
 ## Optional

@@ -20,6 +20,8 @@ var (
 	autoSave        bool
 	maxContextChars int
 	toolProfile     string
+	autoValidate    bool
+	postEditCmds    []string
 )
 
 var rootCmd = &cobra.Command{
@@ -49,6 +51,8 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&autoSave, "auto-save", true, "Auto-save session after each turn")
 	rootCmd.PersistentFlags().IntVar(&maxContextChars, "max-context-chars", 24000, "Approximate max characters sent as chat context")
 	rootCmd.PersistentFlags().StringVar(&toolProfile, "tool-profile", "workspace-write", "Tool permission profile: read-only | workspace-write | full")
+	rootCmd.PersistentFlags().BoolVar(&autoValidate, "auto-validate", false, "Run post-edit validation commands after successful edit tools")
+	rootCmd.PersistentFlags().StringSliceVar(&postEditCmds, "post-edit-cmd", []string{"go test ./..."}, "Validation command(s) to run after edit tools")
 
 	rootCmd.AddCommand(chatCmd)
 }

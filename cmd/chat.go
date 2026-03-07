@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -37,7 +38,11 @@ var chatCmd = &cobra.Command{
 func runChat(cmd *cobra.Command, _ []string) error {
 	client := ollama.NewClient(chatHost, timeout)
 	profile := tools.NormalizeProfile(toolProfile)
-	executor, err := tools.NewExecutor(workspaceRoot, profile)
+	workspaceAbs, err := filepath.Abs(workspaceRoot)
+	if err != nil {
+		return fmt.Errorf("resolve workspace: %w", err)
+	}
+	executor, err := tools.NewExecutor(workspaceAbs, profile)
 	if err != nil {
 		return err
 	}
@@ -151,6 +156,11 @@ func runChat(cmd *cobra.Command, _ []string) error {
 					toolResult := executor.Execute(call)
 					s.AddTool(call.Function.Name, call.ID, toolResult)
 					fmt.Printf("[tool:%s] %s\n", call.Function.Name, summarizeToolResult(toolResult))
+					if autoValidate && tools.IsMutatingTool(call.Function.Name) && toolCallSucceeded(toolResult) {
+						validateResult := runValidation(workspaceAbs, postEditCmds)
+						s.AddTool("post_validate", "", validateResult)
+						fmt.Printf("[post-validate] %s\n", summarizeToolResult(validateResult))
+					}
 				}
 
 				if parsed && strings.TrimSpace(msg.Content) != "" {
@@ -295,6 +305,8 @@ func summarizeToolResult(raw string) string {
 		return fmt.Sprintf("ok=true checked=%t applied=%t", asBool(obj["checked"]), asBool(obj["applied"]))
 	case "list_files":
 		return fmt.Sprintf("ok=true files=%d", asInt(obj["count"]))
+	case "post_validate":
+		return fmt.Sprintf("ok=%t commands=%d", ok, lenAny(obj["commands"]))
 	default:
 		return "ok=true"
 	}
@@ -319,6 +331,60 @@ func asInt(v any) int {
 	default:
 		return 0
 	}
+}
+
+func lenAny(v any) int {
+	switch arr := v.(type) {
+	case []any:
+		return len(arr)
+	default:
+		return 0
+	}
+}
+
+func toolCallSucceeded(raw string) bool {
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(raw), &obj); err != nil {
+		return false
+	}
+	return asBool(obj["ok"])
+}
+
+func runValidation(workspace string, commands []string) string {
+	result := map[string]any{
+		"tool":     "post_validate",
+		"ok":       true,
+		"commands": []map[string]any{},
+	}
+	entries := make([]map[string]any, 0, len(commands))
+	for _, command := range commands {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		c := exec.CommandContext(ctx, "bash", "-lc", command)
+		c.Dir = workspace
+		out, err := c.CombinedOutput()
+		cancel()
+
+		entry := map[string]any{
+			"command": command,
+			"output":  truncateOutput(string(out), 2000),
+		}
+		if err != nil {
+			entry["error"] = err.Error()
+			result["ok"] = false
+		}
+		entries = append(entries, entry)
+	}
+	result["commands"] = entries
+
+	data, _ := json.Marshal(result)
+	return string(data)
+}
+
+func truncateOutput(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "\n...<truncated>"
 }
 
 func buildSystemPrompt(base string, enableTools bool) string {

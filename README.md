@@ -29,6 +29,8 @@ go build -o codew .
 - `--auto-save` (default: `true`)
 - `--max-context-chars` (default: `24000`)
 - `--tool-profile` (default: `workspace-write`)
+- `--auto-validate` (default: `false`)
+- `--post-edit-cmd` (default: `go test ./...`, 複数指定可)
 
 ## Environment Variables
 
@@ -106,6 +108,11 @@ index 1111111..2222222 100644
 
 - `shell_exec` は `pty=true` を指定すると擬似TTYでコマンド実行します。
 - 対話系ツールやTTY前提のコマンドで利用できます。
+
+## Post-edit Validation
+
+- `--auto-validate` を有効化すると、編集系ツール成功後に検証コマンドを自動実行します。
+- `--post-edit-cmd` を複数指定して test/lint を連続実行できます。
 
 ## Notes
 
