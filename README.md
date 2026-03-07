@@ -34,6 +34,9 @@ go build -o codew .
 - `--retries` (default: `2`)
 - `--retry-backoff` (default: `2s`)
 - `--fallback-model` (default: empty)
+- `--auto-context` (default: `true`)
+- `--auto-context-files` (default: `4`)
+- `--auto-context-chars` (default: `8000`)
 
 ## Environment Variables
 
@@ -127,6 +130,12 @@ index 1111111..2222222 100644
 
 - API 失敗時は `--retries` 回まで指数バックオフで再試行します。
 - すべて失敗した場合、`--fallback-model` が指定されていればモデルを切り替えて再試行します。
+
+## Auto Context From Project Files
+
+- `--auto-context=true` の場合、ユーザー入力ごとに関連しそうなファイルをプロジェクト内から自動抽出します。
+- 抽出したファイル内容は一時的な system 文脈として注入されます（履歴には永続化しません）。
+- 件数と文字数は `--auto-context-files` / `--auto-context-chars` で制御できます。
 
 ## Notes
 

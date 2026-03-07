@@ -7,24 +7,27 @@ import (
 )
 
 var (
-	chatHost        string
-	chatModel       string
-	systemText      string
-	timeout         time.Duration
-	toolsEnabled    bool
-	autoApprove     bool
-	workspaceRoot   string
-	maxToolSteps    int
-	sessionFile     string
-	resumeSession   bool
-	autoSave        bool
-	maxContextChars int
-	toolProfile     string
-	autoValidate    bool
-	postEditCmds    []string
-	retries         int
-	retryBackoff    time.Duration
-	fallbackModel   string
+	chatHost         string
+	chatModel        string
+	systemText       string
+	timeout          time.Duration
+	toolsEnabled     bool
+	autoApprove      bool
+	workspaceRoot    string
+	maxToolSteps     int
+	sessionFile      string
+	resumeSession    bool
+	autoSave         bool
+	maxContextChars  int
+	toolProfile      string
+	autoValidate     bool
+	postEditCmds     []string
+	retries          int
+	retryBackoff     time.Duration
+	fallbackModel    string
+	autoContext      bool
+	autoContextFiles int
+	autoContextChars int
 )
 
 var rootCmd = &cobra.Command{
@@ -59,6 +62,9 @@ func init() {
 	rootCmd.PersistentFlags().IntVar(&retries, "retries", 2, "Retry count per model when API request fails")
 	rootCmd.PersistentFlags().DurationVar(&retryBackoff, "retry-backoff", 2*time.Second, "Base backoff duration between retries")
 	rootCmd.PersistentFlags().StringVar(&fallbackModel, "fallback-model", "", "Fallback model to use after retries are exhausted")
+	rootCmd.PersistentFlags().BoolVar(&autoContext, "auto-context", true, "Auto-load relevant project files into prompt context")
+	rootCmd.PersistentFlags().IntVar(&autoContextFiles, "auto-context-files", 4, "Max number of files to auto-load as context per turn")
+	rootCmd.PersistentFlags().IntVar(&autoContextChars, "auto-context-chars", 8000, "Max total characters for auto-loaded context per turn")
 
 	rootCmd.AddCommand(chatCmd)
 }

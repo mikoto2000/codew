@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"ollama-codex-cli/internal/agent"
+	"ollama-codex-cli/internal/contextloader"
 	"ollama-codex-cli/internal/ollama"
 	"ollama-codex-cli/internal/session"
 	"ollama-codex-cli/internal/tools"
@@ -74,6 +75,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	fmt.Printf("Tools: %t (auto-approve=%t)\n", toolsEnabled, autoApprove)
 	fmt.Printf("Tool profile: %s\n", profile)
 	fmt.Printf("Context limit: %d chars\n", maxContextChars)
+	fmt.Printf("Auto context: %t (files=%d chars=%d)\n", autoContext, autoContextFiles, autoContextChars)
 	fmt.Printf("Retries: %d (backoff=%s, fallback=%s)\n", retries, retryBackoff, fallbackModel)
 	fmt.Printf("Session file: %s (auto-save=%t)\n", sessionPath, autoSave)
 	fmt.Println("Commands: /exit, /model <name>, /system <text>, /reset, /save, /load, /help")
@@ -114,11 +116,23 @@ func runChat(cmd *cobra.Command, _ []string) error {
 		}
 
 		s.AddUser(line)
+		autoCtx := ""
+		if autoContext {
+			ctxText, ctxErr := contextloader.Build(workspaceAbs, line, autoContextFiles, autoContextChars)
+			if ctxErr != nil {
+				fmt.Fprintf(os.Stderr, "warning: auto-context failed: %v\n", ctxErr)
+			} else {
+				autoCtx = ctxText
+				if autoCtx != "" {
+					fmt.Printf("[auto-context] loaded\n")
+				}
+			}
+		}
 		fmt.Print("assistant> ")
 
 		finalPrinted := false
 		for step := 0; step < maxToolSteps; step++ {
-			messages := s.MessagesForModel(maxContextChars)
+			messages := withAutoContext(s.MessagesForModel(maxContextChars), autoCtx)
 			ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
 			msg, usedModel, chatErr := chatWithRetry(ctx, client, s.Model, messages, toolDefs)
 			cancel()
@@ -421,6 +435,25 @@ func chatWithRetry(ctx context.Context, client *ollama.Client, primaryModel stri
 		}
 	}
 	return ollama.Message{}, primaryModel, lastErr
+}
+
+func withAutoContext(messages []ollama.Message, autoCtx string) []ollama.Message {
+	if strings.TrimSpace(autoCtx) == "" || len(messages) == 0 {
+		return messages
+	}
+	last := messages[len(messages)-1]
+	if last.Role != "user" {
+		out := make([]ollama.Message, 0, len(messages)+1)
+		out = append(out, messages...)
+		out = append(out, ollama.Message{Role: "system", Content: autoCtx})
+		return out
+	}
+
+	out := make([]ollama.Message, 0, len(messages)+1)
+	out = append(out, messages[:len(messages)-1]...)
+	out = append(out, ollama.Message{Role: "system", Content: autoCtx})
+	out = append(out, last)
+	return out
 }
 
 func buildSystemPrompt(base string, enableTools bool) string {
