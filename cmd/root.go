@@ -22,6 +22,9 @@ var (
 	toolProfile     string
 	autoValidate    bool
 	postEditCmds    []string
+	retries         int
+	retryBackoff    time.Duration
+	fallbackModel   string
 )
 
 var rootCmd = &cobra.Command{
@@ -53,6 +56,9 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&toolProfile, "tool-profile", "workspace-write", "Tool permission profile: read-only | workspace-write | full")
 	rootCmd.PersistentFlags().BoolVar(&autoValidate, "auto-validate", false, "Run post-edit validation commands after successful edit tools")
 	rootCmd.PersistentFlags().StringSliceVar(&postEditCmds, "post-edit-cmd", []string{"go test ./..."}, "Validation command(s) to run after edit tools")
+	rootCmd.PersistentFlags().IntVar(&retries, "retries", 2, "Retry count per model when API request fails")
+	rootCmd.PersistentFlags().DurationVar(&retryBackoff, "retry-backoff", 2*time.Second, "Base backoff duration between retries")
+	rootCmd.PersistentFlags().StringVar(&fallbackModel, "fallback-model", "", "Fallback model to use after retries are exhausted")
 
 	rootCmd.AddCommand(chatCmd)
 }

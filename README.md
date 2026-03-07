@@ -31,6 +31,9 @@ go build -o codew .
 - `--tool-profile` (default: `workspace-write`)
 - `--auto-validate` (default: `false`)
 - `--post-edit-cmd` (default: `go test ./...`, 複数指定可)
+- `--retries` (default: `2`)
+- `--retry-backoff` (default: `2s`)
+- `--fallback-model` (default: empty)
 
 ## Environment Variables
 
@@ -119,6 +122,11 @@ index 1111111..2222222 100644
 
 - `web_search` は DuckDuckGo Instant Answer API を使って検索結果を返します。
 - 外部ネットワークにアクセスできる環境で利用してください。
+
+## Retry Strategy
+
+- API 失敗時は `--retries` 回まで指数バックオフで再試行します。
+- すべて失敗した場合、`--fallback-model` が指定されていればモデルを切り替えて再試行します。
 
 ## Notes
 

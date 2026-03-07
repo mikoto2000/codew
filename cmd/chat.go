@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -73,6 +74,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	fmt.Printf("Tools: %t (auto-approve=%t)\n", toolsEnabled, autoApprove)
 	fmt.Printf("Tool profile: %s\n", profile)
 	fmt.Printf("Context limit: %d chars\n", maxContextChars)
+	fmt.Printf("Retries: %d (backoff=%s, fallback=%s)\n", retries, retryBackoff, fallbackModel)
 	fmt.Printf("Session file: %s (auto-save=%t)\n", sessionPath, autoSave)
 	fmt.Println("Commands: /exit, /model <name>, /system <text>, /reset, /save, /load, /help")
 
@@ -118,13 +120,16 @@ func runChat(cmd *cobra.Command, _ []string) error {
 		for step := 0; step < maxToolSteps; step++ {
 			messages := s.MessagesForModel(maxContextChars)
 			ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
-			msg, chatErr := client.Chat(ctx, s.Model, messages, toolDefs)
+			msg, usedModel, chatErr := chatWithRetry(ctx, client, s.Model, messages, toolDefs)
 			cancel()
 
 			if chatErr != nil {
 				fmt.Fprintf(os.Stderr, "\nrequest failed: %v\n", chatErr)
 				if step == 0 {
 					s.RollbackLastUser()
+				}
+				if usedModel != s.Model {
+					fmt.Printf("\n[model fallback] using %s\n", usedModel)
 				}
 				break
 			}
@@ -385,6 +390,37 @@ func truncateOutput(s string, max int) string {
 		return s
 	}
 	return s[:max] + "\n...<truncated>"
+}
+
+func chatWithRetry(ctx context.Context, client *ollama.Client, primaryModel string, messages []ollama.Message, defs []ollama.ToolDefinition) (ollama.Message, string, error) {
+	models := []string{primaryModel}
+	if strings.TrimSpace(fallbackModel) != "" && fallbackModel != primaryModel {
+		models = append(models, fallbackModel)
+	}
+
+	var lastErr error
+	for modelIndex, model := range models {
+		for attempt := 0; attempt <= retries; attempt++ {
+			msg, err := client.Chat(ctx, model, messages, defs)
+			if err == nil {
+				return msg, model, nil
+			}
+			lastErr = err
+			if attempt < retries {
+				sleep := retryBackoff * time.Duration(1<<attempt)
+				select {
+				case <-time.After(sleep):
+				case <-ctx.Done():
+					return ollama.Message{}, model, ctx.Err()
+				}
+				continue
+			}
+		}
+		if modelIndex < len(models)-1 {
+			fmt.Printf("\n[retry] model %s exhausted, switching to %s\n", model, models[modelIndex+1])
+		}
+	}
+	return ollama.Message{}, primaryModel, lastErr
 }
 
 func buildSystemPrompt(base string, enableTools bool) string {
