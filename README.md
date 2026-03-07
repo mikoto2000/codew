@@ -54,6 +54,12 @@ go build -o codew .
 - `/load`
 - `/exit` or `/quit`
 
+入力履歴ナビゲーション:
+- `↑` / `↓`
+- `Ctrl+P` / `Ctrl+N`
+
+履歴は `.codew/history.txt` に保存されます。
+
 ## Tool Calling
 
 `--tools=true` の場合、モデルがツール呼び出し JSON を返すとローカルで実行し、結果をモデルへ返送します。

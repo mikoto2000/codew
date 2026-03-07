@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -14,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/peterh/liner"
 	"github.com/spf13/cobra"
 
 	"ollama-codex-cli/internal/agent"
@@ -52,6 +52,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("resolve session-file: %w", err)
 	}
+	historyPath := filepath.Join(workspaceAbs, ".codew", "history.txt")
 
 	s := session.New(chatModel, buildSystemPrompt(systemText, toolsEnabled))
 	if resumeSession {
@@ -80,25 +81,36 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	fmt.Printf("Session file: %s (auto-save=%t)\n", sessionPath, autoSave)
 	fmt.Println("Commands: /exit, /model <name>, /system <text>, /reset, /save, /load, /help")
 
-	reader := bufio.NewReader(os.Stdin)
+	lineEditor := liner.NewLiner()
+	defer lineEditor.Close()
+	lineEditor.SetCtrlCAborts(true)
+	if err := loadLineHistory(lineEditor, historyPath); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to load history: %v\n", err)
+	}
+	defer func() {
+		if err := saveLineHistory(lineEditor, historyPath); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to save history: %v\n", err)
+		}
+	}()
+
 	approveAll := autoApprove
 
 	for {
-		fmt.Print("you> ")
-		line, err := reader.ReadString('\n')
+		line, err := lineEditor.Prompt("you> ")
 		if err != nil {
-			if errors.Is(err, io.EOF) && len(strings.TrimSpace(line)) > 0 {
-				// Continue processing the final line without a trailing newline.
-			} else if errors.Is(err, io.EOF) {
-				return nil
-			} else if len(line) == 0 {
+			if errors.Is(err, io.EOF) {
 				return nil
 			}
+			if errors.Is(err, liner.ErrPromptAborted) {
+				continue
+			}
+			return err
 		}
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
+		lineEditor.AppendHistory(line)
 
 		if strings.HasPrefix(line, "/") {
 			done, cmdErr := runCommand(line, s, sessionPath)
@@ -159,7 +171,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 						if tools.IsMutatingTool(call.Function.Name) {
 							preview = tools.Preview(call)
 						}
-						approved, allowAll := askToolApproval(reader, call, preview)
+						approved, allowAll := askToolApproval(lineEditor, call, preview)
 						if allowAll {
 							approveAll = true
 						}
@@ -209,13 +221,15 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	}
 }
 
-func askToolApproval(reader *bufio.Reader, call ollama.ToolCall, preview string) (approved bool, allowAll bool) {
+func askToolApproval(lineEditor *liner.State, call ollama.ToolCall, preview string) (approved bool, allowAll bool) {
 	args := compactJSON(call.Function.Arguments)
 	if preview != "" {
 		fmt.Printf("\n[tool:%s preview]\n%s\n", call.Function.Name, preview)
 	}
-	fmt.Printf("approve tool %s args=%s ? [y/N/a]: ", call.Function.Name, args)
-	line, _ := reader.ReadString('\n')
+	line, err := lineEditor.Prompt(fmt.Sprintf("approve tool %s args=%s ? [y/N/a]: ", call.Function.Name, args))
+	if err != nil {
+		return false, false
+	}
 	switch strings.ToLower(strings.TrimSpace(line)) {
 	case "y", "yes":
 		return true, false
@@ -224,6 +238,32 @@ func askToolApproval(reader *bufio.Reader, call ollama.ToolCall, preview string)
 	default:
 		return false, false
 	}
+}
+
+func loadLineHistory(lineEditor *liner.State, path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	defer file.Close()
+	_, err = lineEditor.ReadHistory(file)
+	return err
+}
+
+func saveLineHistory(lineEditor *liner.State, path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	_, err = lineEditor.WriteHistory(file)
+	return err
 }
 
 func compactJSON(raw json.RawMessage) string {
