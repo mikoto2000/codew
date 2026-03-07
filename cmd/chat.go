@@ -51,6 +51,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 
 	client := ollama.NewClient(chatHost, timeout)
 	profile := tools.NormalizeProfile(toolProfile)
+	sandbox := tools.NormalizeSandboxMode(sandboxMode)
 	workspaceAbs, err := filepath.Abs(workspaceRoot)
 	if err != nil {
 		return fmt.Errorf("resolve workspace: %w", err)
@@ -65,7 +66,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 		}
 		defer mcpManager.Close()
 	}
-	executor, err := tools.NewExecutor(workspaceAbs, profile, dryRun, mcpManager)
+	executor, err := tools.NewExecutor(workspaceAbs, profile, dryRun, sandbox, mcpManager)
 	if err != nil {
 		return err
 	}
@@ -109,6 +110,8 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	}
 	fmt.Printf("Tools: %t (auto-approve=%t)\n", toolsEnabled, autoApprove)
 	fmt.Printf("Tool profile: %s\n", profile)
+	fmt.Printf("Sandbox mode: %s\n", sandbox)
+	fmt.Printf("Network escalation: allow=%t allow-tools=%v\n", networkAllow, networkAllowTool)
 	fmt.Printf("MCP: %t (config=%s, tools=%d)\n", mcpEnabled, mcpConfig, len(mcpManager.Definitions()))
 	fmt.Printf("Context limit: %d chars\n", maxContextChars)
 	fmt.Printf("Auto context: %t (files=%d chars=%d)\n", autoContext, autoContextFiles, autoContextChars)
@@ -132,6 +135,13 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	}()
 
 	approveAll := autoApprove
+	networkRules := map[string]bool{}
+	for _, t := range networkAllowTool {
+		t = strings.TrimSpace(t)
+		if t != "" {
+			networkRules[t] = true
+		}
+	}
 
 	for {
 		line, err := lineEditor.Prompt("you> ")
@@ -203,8 +213,8 @@ func runChat(cmd *cobra.Command, _ []string) error {
 			if toolsEnabled && len(toolCalls) > 0 {
 				msg.ToolCalls = toolCalls
 				s.AddAssistantMessage(msg)
-				if canRunInParallel(toolCalls) {
-					results := runToolCallsParallel(executor, toolCalls)
+				if canRunInParallel(toolCalls, sandbox, networkAllow, networkRules) {
+					results := runToolCallsParallel(executor, toolCalls, sandbox)
 					for i, call := range toolCalls {
 						toolResult := results[i]
 						s.AddTool(call.Function.Name, call.ID, toolResult)
@@ -234,6 +244,21 @@ func runChat(cmd *cobra.Command, _ []string) error {
 					}
 
 					fmt.Printf("\n[tool:%s] running...\n", call.Function.Name)
+					callSandbox := sandbox
+					if needsNetworkEscalation(call, mcpManager, sandbox, networkAllow, networkRules) {
+						allowOnce, allowAlways := askNetworkEscalation(lineEditor, call.Function.Name)
+						if allowAlways {
+							networkRules[call.Function.Name] = true
+						}
+						if !allowOnce && !allowAlways {
+							toolResult := `{"ok":false,"error":"network escalation denied by user"}`
+							s.AddTool(call.Function.Name, call.ID, toolResult)
+							fmt.Printf("[tool:%s] denied network escalation\n", call.Function.Name)
+							writeToolLog(toolLogger, line, call.Function.Name, compactJSON(call.Function.Arguments), toolResult, false)
+							continue
+						}
+						callSandbox = tools.SandboxFull
+					}
 					if autoCheckpoint && !turnCheckpointed && tools.IsMutatingTool(call.Function.Name) && !dryRun {
 						id, cpErr := checkpoints.Create()
 						if cpErr != nil {
@@ -243,7 +268,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 							fmt.Printf("[checkpoint] created: %s\n", id)
 						}
 					}
-					toolResult := executor.Execute(call)
+					toolResult := executor.ExecuteWithSandbox(call, callSandbox)
 					s.AddTool(call.Function.Name, call.ID, toolResult)
 					fmt.Printf("[tool:%s] %s\n", call.Function.Name, summarizeToolResult(toolResult))
 					writeToolLog(toolLogger, line, call.Function.Name, compactJSON(call.Function.Arguments), toolResult, true)
@@ -588,12 +613,15 @@ func withAutoContext(messages []ollama.Message, autoCtx string) []ollama.Message
 	return out
 }
 
-func canRunInParallel(calls []ollama.ToolCall) bool {
+func canRunInParallel(calls []ollama.ToolCall, sandbox string, networkAllow bool, networkRules map[string]bool) bool {
 	if len(calls) < 2 {
 		return false
 	}
 	for _, c := range calls {
 		if !isParallelSafeTool(c.Function.Name) {
+			return false
+		}
+		if needsNetworkEscalation(c, nil, sandbox, networkAllow, networkRules) {
 			return false
 		}
 	}
@@ -609,7 +637,7 @@ func isParallelSafeTool(name string) bool {
 	}
 }
 
-func runToolCallsParallel(executor *tools.Executor, calls []ollama.ToolCall) []string {
+func runToolCallsParallel(executor *tools.Executor, calls []ollama.ToolCall, sandbox string) []string {
 	results := make([]string, len(calls))
 	var wg sync.WaitGroup
 	wg.Add(len(calls))
@@ -618,11 +646,37 @@ func runToolCallsParallel(executor *tools.Executor, calls []ollama.ToolCall) []s
 		call := call
 		go func() {
 			defer wg.Done()
-			results[i] = executor.Execute(call)
+			results[i] = executor.ExecuteWithSandbox(call, sandbox)
 		}()
 	}
 	wg.Wait()
 	return results
+}
+
+func needsNetworkEscalation(call ollama.ToolCall, mcpManager *mcp.Manager, sandbox string, allowAll bool, allowRules map[string]bool) bool {
+	if allowAll || tools.AllowsNetwork(sandbox) {
+		return false
+	}
+	if allowRules[call.Function.Name] {
+		return false
+	}
+	isMCP := mcpManager != nil && mcpManager.HasTool(call.Function.Name)
+	return tools.RequiresNetwork(call.Function.Name, isMCP)
+}
+
+func askNetworkEscalation(lineEditor *liner.State, toolName string) (allowOnce bool, allowAlways bool) {
+	line, err := lineEditor.Prompt(fmt.Sprintf("network escalation required for %s. allow once [y], always [a], deny [N]: ", toolName))
+	if err != nil {
+		return false, false
+	}
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true, false
+	case "a", "all", "always":
+		return false, true
+	default:
+		return false, false
+	}
 }
 
 func colorizeDiff(text string) string {

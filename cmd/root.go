@@ -39,6 +39,9 @@ var (
 	showVersion      bool
 	mcpEnabled       bool
 	mcpConfig        string
+	sandboxMode      string
+	networkAllow     bool
+	networkAllowTool []string
 )
 
 var rootCmd = &cobra.Command{
@@ -91,6 +94,9 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&showVersion, "version", false, "Show version and exit")
 	rootCmd.PersistentFlags().BoolVar(&mcpEnabled, "mcp", false, "Enable MCP client tools from config")
 	rootCmd.PersistentFlags().StringVar(&mcpConfig, "mcp-config", ".codew/mcp.json", "Path to MCP server config JSON")
+	rootCmd.PersistentFlags().StringVar(&sandboxMode, "sandbox-mode", "workspace-write", "Sandbox permission mode: read-only | workspace-write | full")
+	rootCmd.PersistentFlags().BoolVar(&networkAllow, "network-allow", false, "Allow network tool escalation for this session")
+	rootCmd.PersistentFlags().StringSliceVar(&networkAllowTool, "network-allow-tool", nil, "Allow network escalation for specific tool names")
 
 	rootCmd.AddCommand(chatCmd)
 	rootCmd.AddCommand(runCmd)

@@ -27,14 +27,21 @@ type Executor struct {
 	profile   string
 	dryRun    bool
 	mcp       *mcp.Manager
+	sandbox   string
 }
 
-func NewExecutor(workspace string, profile string, dryRun bool, mcpManager *mcp.Manager) (*Executor, error) {
+func NewExecutor(workspace string, profile string, dryRun bool, sandboxMode string, mcpManager *mcp.Manager) (*Executor, error) {
 	abs, err := filepath.Abs(workspace)
 	if err != nil {
 		return nil, fmt.Errorf("resolve workspace: %w", err)
 	}
-	return &Executor{workspace: abs, profile: NormalizeProfile(profile), dryRun: dryRun, mcp: mcpManager}, nil
+	return &Executor{
+		workspace: abs,
+		profile:   NormalizeProfile(profile),
+		dryRun:    dryRun,
+		mcp:       mcpManager,
+		sandbox:   NormalizeSandboxMode(sandboxMode),
+	}, nil
 }
 
 func Definitions() []ollama.ToolDefinition {
@@ -155,8 +162,22 @@ func AllowedToolNames() map[string]struct{} {
 }
 
 func (e *Executor) Execute(call ollama.ToolCall) string {
+	return e.executeWithSandbox(call, e.sandbox)
+}
+
+func (e *Executor) ExecuteWithSandbox(call ollama.ToolCall, sandboxMode string) string {
+	return e.executeWithSandbox(call, NormalizeSandboxMode(sandboxMode))
+}
+
+func (e *Executor) executeWithSandbox(call ollama.ToolCall, sandboxMode string) string {
 	result := map[string]any{"tool": call.Function.Name}
 	if e.mcp != nil && e.mcp.HasTool(call.Function.Name) {
+		if err := CheckPermissions(sandboxMode, RequiredPermissions(call.Function.Name, true)); err != nil {
+			result["ok"] = false
+			result["error"] = err.Error()
+			data, _ := json.Marshal(result)
+			return string(data)
+		}
 		if e.profile != ProfileFull {
 			result["ok"] = false
 			result["error"] = fmt.Sprintf("mcp tool %q is allowed only in profile %q", call.Function.Name, ProfileFull)
@@ -173,6 +194,12 @@ func (e *Executor) Execute(call ollama.ToolCall) string {
 				result[k] = v
 			}
 		}
+		data, _ := json.Marshal(result)
+		return string(data)
+	}
+	if err := CheckPermissions(sandboxMode, RequiredPermissions(call.Function.Name, false)); err != nil {
+		result["ok"] = false
+		result["error"] = err.Error()
 		data, _ := json.Marshal(result)
 		return string(data)
 	}

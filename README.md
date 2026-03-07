@@ -50,6 +50,9 @@ go build -o codew .
 - `--model-profile` (default: empty, `coding-fast` | `coding-safe` | `research`)
 - `--mcp` (default: `false`)
 - `--mcp-config` (default: `.codew/mcp.json`)
+- `--sandbox-mode` (default: `workspace-write`, `read-only` | `workspace-write` | `full`)
+- `--network-allow` (default: `false`)
+- `--network-allow-tool` (specific tool names for network escalation)
 
 ## Environment Variables
 
@@ -211,6 +214,22 @@ codew run "このリポジトリで TODO の進め方を提案して"
 - `--mcp` を有効にすると `.codew/mcp.json` の MCP サーバーを起動し、`tools/list` の結果を `mcp.<server>.<tool>` として公開します。
 - MCP ツール実行は `tools/call` へ中継されます。
 - 安全のため MCP ツールは `--tool-profile full` でのみ実行可能です。
+
+## Sandbox Permissions
+
+`--sandbox-mode` で実行時権限を制御します。
+
+- `read-only`: `read` のみ
+- `workspace-write`: `read` + `write`
+- `full`: `read` + `write` + `network` + `exec`
+
+各ツールには必要権限が割り当てられ、実行前に一貫した判定を行います。
+
+## Network Escalation
+
+- `sandbox-mode` で `network` が許可されていない場合、ネットワーク系ツールは拒否されます。
+- 対話モードでは都度承認（allow once / allow always / deny）できます。
+- 非対話や事前許可には `--network-allow` または `--network-allow-tool` を使用します。
 
 設定例 (`.codew/mcp.json`):
 

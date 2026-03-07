@@ -44,6 +44,7 @@ func runOnce(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	profile := tools.NormalizeProfile(toolProfile)
+	sandbox := tools.NormalizeSandboxMode(sandboxMode)
 	client := ollama.NewClient(chatHost, timeout)
 	mcpManager := mcp.NewManager()
 	if mcpEnabled {
@@ -55,7 +56,7 @@ func runOnce(cmd *cobra.Command, args []string) error {
 		}
 		defer mcpManager.Close()
 	}
-	executor, err := tools.NewExecutor(workspaceAbs, profile, dryRun, mcpManager)
+	executor, err := tools.NewExecutor(workspaceAbs, profile, dryRun, sandbox, mcpManager)
 	if err != nil {
 		return err
 	}
@@ -90,6 +91,13 @@ func runOnce(cmd *cobra.Command, args []string) error {
 	}
 
 	checkpointed := false
+	networkRules := map[string]bool{}
+	for _, t := range networkAllowTool {
+		t = strings.TrimSpace(t)
+		if t != "" {
+			networkRules[t] = true
+		}
+	}
 	for step := 0; step < maxToolSteps; step++ {
 		messages := withAutoContext(s.MessagesForModel(maxContextChars), autoCtx)
 		ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
@@ -103,20 +111,26 @@ func runOnce(cmd *cobra.Command, args []string) error {
 		if toolsEnabled && len(toolCalls) > 0 {
 			s.AddAssistantMessage(msg)
 			results := map[int]string{}
-			if canRunInParallel(toolCalls) {
-				parallel := runToolCallsParallel(executor, toolCalls)
+			if canRunInParallel(toolCalls, sandbox, networkAllow, networkRules) {
+				parallel := runToolCallsParallel(executor, toolCalls, sandbox)
 				for i, result := range parallel {
 					results[i] = result
 				}
 			} else {
 				for i, call := range toolCalls {
+					callSandbox := sandbox
+					if needsNetworkEscalation(call, mcpManager, sandbox, networkAllow, networkRules) {
+						if networkAllow || networkRules[call.Function.Name] {
+							callSandbox = tools.SandboxFull
+						}
+					}
 					if autoCheckpoint && !checkpointed && tools.IsMutatingTool(call.Function.Name) && !dryRun {
 						if id, e := cp.Create(); e == nil {
 							checkpointed = true
 							fmt.Fprintf(os.Stderr, "[checkpoint] created: %s\n", id)
 						}
 					}
-					results[i] = executor.Execute(call)
+					results[i] = executor.ExecuteWithSandbox(call, callSandbox)
 				}
 			}
 
