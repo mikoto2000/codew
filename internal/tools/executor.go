@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -126,6 +129,21 @@ func Definitions() []ollama.ToolDefinition {
 				},
 			},
 		},
+		{
+			Type: "function",
+			Function: ollama.ToolDefinitionFunc{
+				Name:        "web_search",
+				Description: "Search public web results for a query.",
+				Parameters: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"query":       map[string]any{"type": "string"},
+						"max_results": map[string]any{"type": "integer", "minimum": 1, "maximum": 10},
+					},
+					"required": []string{"query"},
+				},
+			},
+		},
 	}
 }
 
@@ -159,6 +177,8 @@ func (e *Executor) Execute(call ollama.ToolCall) string {
 		payload, err = e.replaceInFile(call.Function.Arguments)
 	case "apply_patch":
 		payload, err = e.applyPatch(call.Function.Arguments)
+	case "web_search":
+		payload, err = e.webSearch(call.Function.Arguments)
 	default:
 		err = fmt.Errorf("unknown tool: %s", call.Function.Name)
 	}
@@ -455,6 +475,88 @@ func (e *Executor) applyPatch(raw json.RawMessage) (map[string]any, error) {
 	}, nil
 }
 
+type webSearchArgs struct {
+	Query      string `json:"query"`
+	MaxResults int    `json:"max_results"`
+}
+
+type ddgTopic struct {
+	Text     string     `json:"Text"`
+	FirstURL string     `json:"FirstURL"`
+	Topics   []ddgTopic `json:"Topics"`
+}
+
+type ddgResponse struct {
+	Heading      string     `json:"Heading"`
+	AbstractText string     `json:"AbstractText"`
+	AbstractURL  string     `json:"AbstractURL"`
+	Related      []ddgTopic `json:"RelatedTopics"`
+}
+
+func (e *Executor) webSearch(raw json.RawMessage) (map[string]any, error) {
+	var in webSearchArgs
+	if err := decodeArgs(raw, &in); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(in.Query) == "" {
+		return nil, errors.New("query is required")
+	}
+	if in.MaxResults <= 0 {
+		in.MaxResults = 5
+	}
+
+	endpoint := "https://api.duckduckgo.com/?format=json&no_html=1&no_redirect=1&q=" + url.QueryEscape(in.Query)
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	client := &http.Client{Timeout: 12 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return nil, fmt.Errorf("search failed %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	}
+
+	var decoded ddgResponse
+	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
+		return nil, err
+	}
+
+	results := make([]map[string]string, 0, in.MaxResults)
+	if decoded.AbstractText != "" {
+		results = append(results, map[string]string{
+			"title":   decoded.Heading,
+			"url":     decoded.AbstractURL,
+			"snippet": decoded.AbstractText,
+		})
+	}
+
+	flattened := flattenTopics(decoded.Related)
+	for _, item := range flattened {
+		if len(results) >= in.MaxResults {
+			break
+		}
+		if item.Text == "" && item.FirstURL == "" {
+			continue
+		}
+		results = append(results, map[string]string{
+			"title":   item.Text,
+			"url":     item.FirstURL,
+			"snippet": item.Text,
+		})
+	}
+
+	return map[string]any{
+		"query":   in.Query,
+		"count":   len(results),
+		"results": results,
+	}, nil
+}
+
 func decodeArgs(raw json.RawMessage, out any) error {
 	if len(raw) == 0 {
 		return errors.New("arguments are required")
@@ -525,6 +627,18 @@ func (e *Executor) patchTargets(patch string) ([]string, error) {
 		}
 	}
 	return out, nil
+}
+
+func flattenTopics(in []ddgTopic) []ddgTopic {
+	out := make([]ddgTopic, 0, len(in))
+	for _, t := range in {
+		if len(t.Topics) > 0 {
+			out = append(out, flattenTopics(t.Topics)...)
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
 }
 
 func (e *Executor) resolvePath(path string) (string, error) {

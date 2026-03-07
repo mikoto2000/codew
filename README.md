@@ -59,6 +59,7 @@ go build -o codew .
 - `write_file` (`path`, `content`)
 - `replace_in_file` (`path`, `old`, `new`, `replace_all`)
 - `apply_patch` (`patch`, `check_only`)
+- `web_search` (`query`, `max_results`)
 
 ### Safe Edit (`apply_patch`)
 
@@ -102,7 +103,7 @@ index 1111111..2222222 100644
 
 - `read-only`: `list_files`, `read_file`
 - `workspace-write`: 上記 + `write_file`, `replace_in_file`, `apply_patch`
-- `full`: すべてのツール（`shell_exec` など）
+- `full`: すべてのツール（`shell_exec`, `web_search` など）
 
 ## PTY Execution
 
@@ -113,6 +114,11 @@ index 1111111..2222222 100644
 
 - `--auto-validate` を有効化すると、編集系ツール成功後に検証コマンドを自動実行します。
 - `--post-edit-cmd` を複数指定して test/lint を連続実行できます。
+
+## Web Search Tool
+
+- `web_search` は DuckDuckGo Instant Answer API を使って検索結果を返します。
+- 外部ネットワークにアクセスできる環境で利用してください。
 
 ## Notes
 
