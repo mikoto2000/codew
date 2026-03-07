@@ -1,40 +1,62 @@
 # ocli (Ollama Codex-like CLI)
 
-Go で書いた、Codex CLI 風の最小チャット CLI です。接続先は Ollama API (`/api/chat`) です。
+Go で書いた、Codex CLI 風の対話 CLI です。接続先は Ollama API (`/api/chat`) です。
 
-## 1. Build
+## Build
 
 ```bash
 go build -o ocli .
 ```
 
-## 2. Run
+## Run
 
 ```bash
-./ocli chat --host http://127.0.0.1:11434 --model llama3.2
+./ocli --host http://host.docker.internal:11434 --model qwen2.5-coder:14b
 ```
 
-`chat` を省略しても起動できます。
+## Flags
 
-```bash
-./ocli --model qwen2.5-coder
-```
+- `--host` (default: `http://127.0.0.1:11434`)
+- `--model` (default: `llama3.2`)
+- `--system`
+- `--timeout`
+- `--tools` (default: `true`)
+- `--auto-approve` (default: `false`)
+- `--workspace` (default: `.`)
+- `--max-tool-steps` (default: `8`)
 
-## 3. Environment variables
+## Environment Variables
 
-- `OLLAMA_HOST` (default: `http://127.0.0.1:11434`)
-- `OLLAMA_MODEL` (default: `llama3.2`)
-- `OLLAMA_SYSTEM` (default: `You are a coding assistant.`)
+- `OLLAMA_HOST`
+- `OLLAMA_MODEL`
+- `OLLAMA_SYSTEM`
 
-## 4. In-chat commands
+## In-chat Commands
 
 - `/help`
 - `/model <name>`
-- `/system <text>` (変更時は履歴をリセット)
+- `/system <text>`
 - `/reset`
 - `/exit` or `/quit`
 
-## 5. Notes
+## Tool Calling
 
-- まず Ollama を起動し、モデルを pull してください。
-- 例: `ollama run llama3.2`
+`--tools=true` の場合、モデルがツール呼び出し JSON を返すとローカルで実行し、結果をモデルへ返送します。
+
+対応ツール:
+- `shell_exec` (`command`, `workdir`, `timeout_sec`)
+- `list_files` (`path`, `pattern`, `max_results`)
+- `read_file` (`path`)
+- `write_file` (`path`, `content`)
+- `replace_in_file` (`path`, `old`, `new`, `replace_all`)
+
+ツール実行はデフォルトで都度承認です。全自動にする場合:
+
+```bash
+./ocli --host http://host.docker.internal:11434 --model qwen2.5-coder:14b --auto-approve
+```
+
+## Notes
+
+- ファイル操作は `--workspace` 配下に制限しています。
+- `shell_exec` の出力は長すぎる場合に切り詰めます。

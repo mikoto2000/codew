@@ -22,8 +22,18 @@ func (s *Session) AddUser(content string) {
 	s.history = append(s.history, ollama.Message{Role: "user", Content: content})
 }
 
-func (s *Session) AddAssistant(content string) {
-	s.history = append(s.history, ollama.Message{Role: "assistant", Content: content})
+func (s *Session) AddAssistantMessage(msg ollama.Message) {
+	msg.Role = "assistant"
+	s.history = append(s.history, msg)
+}
+
+func (s *Session) AddTool(name, toolCallID, content string) {
+	s.history = append(s.history, ollama.Message{
+		Role:       "tool",
+		Name:       name,
+		ToolCallID: toolCallID,
+		Content:    content,
+	})
 }
 
 func (s *Session) RollbackLastUser() {

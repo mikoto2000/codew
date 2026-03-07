@@ -1,7 +1,6 @@
 package ollama
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -13,19 +12,44 @@ import (
 )
 
 type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string     `json:"role"`
+	Content    string     `json:"content,omitempty"`
+	Name       string     `json:"name,omitempty"`
+	ToolCallID string     `json:"tool_call_id,omitempty"`
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
+}
+
+type ToolCall struct {
+	ID       string           `json:"id,omitempty"`
+	Type     string           `json:"type,omitempty"`
+	Function ToolFunctionCall `json:"function"`
+}
+
+type ToolFunctionCall struct {
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments,omitempty"`
+}
+
+type ToolDefinition struct {
+	Type     string             `json:"type"`
+	Function ToolDefinitionFunc `json:"function"`
+}
+
+type ToolDefinitionFunc struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Parameters  map[string]any `json:"parameters"`
 }
 
 type chatRequest struct {
-	Model    string    `json:"model"`
-	Messages []Message `json:"messages"`
-	Stream   bool      `json:"stream"`
+	Model    string           `json:"model"`
+	Messages []Message        `json:"messages"`
+	Tools    []ToolDefinition `json:"tools,omitempty"`
+	Stream   bool             `json:"stream"`
 }
 
-type chatChunk struct {
+type chatResponse struct {
 	Message Message `json:"message"`
-	Done    bool    `json:"done"`
 	Error   string  `json:"error,omitempty"`
 }
 
@@ -41,65 +65,43 @@ func NewClient(host string, timeout time.Duration) *Client {
 	}
 }
 
-func (c *Client) ChatStream(ctx context.Context, model string, messages []Message, onChunk func(string)) (string, error) {
+func (c *Client) Chat(ctx context.Context, model string, messages []Message, tools []ToolDefinition) (Message, error) {
 	payload := chatRequest{
 		Model:    model,
 		Messages: messages,
-		Stream:   true,
+		Tools:    tools,
+		Stream:   false,
 	}
 
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return "", fmt.Errorf("marshal request: %w", err)
+		return Message{}, fmt.Errorf("marshal request: %w", err)
 	}
 
 	url := c.host + "/api/chat"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
-		return "", fmt.Errorf("build request: %w", err)
+		return Message{}, fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("send request: %w", err)
+		return Message{}, fmt.Errorf("send request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 8*1024))
-		return "", fmt.Errorf("ollama status %s: %s", resp.Status, strings.TrimSpace(string(body)))
+		return Message{}, fmt.Errorf("ollama status %s: %s", resp.Status, strings.TrimSpace(string(body)))
 	}
 
-	scanner := bufio.NewScanner(resp.Body)
-	scanner.Buffer(make([]byte, 0, 64*1024), 2*1024*1024)
-	var full strings.Builder
-
-	for scanner.Scan() {
-		line := bytes.TrimSpace(scanner.Bytes())
-		if len(line) == 0 {
-			continue
-		}
-
-		var chunk chatChunk
-		if err := json.Unmarshal(line, &chunk); err != nil {
-			return "", fmt.Errorf("decode stream chunk: %w", err)
-		}
-		if chunk.Error != "" {
-			return "", fmt.Errorf("ollama error: %s", chunk.Error)
-		}
-
-		if chunk.Message.Content != "" {
-			onChunk(chunk.Message.Content)
-			full.WriteString(chunk.Message.Content)
-		}
-
-		if chunk.Done {
-			break
-		}
+	var out chatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return Message{}, fmt.Errorf("decode response: %w", err)
 	}
-	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("read stream: %w", err)
+	if out.Error != "" {
+		return Message{}, fmt.Errorf("ollama error: %s", out.Error)
 	}
-	return full.String(), nil
+	return out.Message, nil
 }
