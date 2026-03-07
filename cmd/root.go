@@ -7,17 +7,18 @@ import (
 )
 
 var (
-	chatHost      string
-	chatModel     string
-	systemText    string
-	timeout       time.Duration
-	toolsEnabled  bool
-	autoApprove   bool
-	workspaceRoot string
-	maxToolSteps  int
-	sessionFile   string
-	resumeSession bool
-	autoSave      bool
+	chatHost        string
+	chatModel       string
+	systemText      string
+	timeout         time.Duration
+	toolsEnabled    bool
+	autoApprove     bool
+	workspaceRoot   string
+	maxToolSteps    int
+	sessionFile     string
+	resumeSession   bool
+	autoSave        bool
+	maxContextChars int
 )
 
 var rootCmd = &cobra.Command{
@@ -45,6 +46,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&sessionFile, "session-file", ".codew/session.json", "Path for session save/load")
 	rootCmd.PersistentFlags().BoolVar(&resumeSession, "resume", false, "Load previous session from session-file on startup")
 	rootCmd.PersistentFlags().BoolVar(&autoSave, "auto-save", true, "Auto-save session after each turn")
+	rootCmd.PersistentFlags().IntVar(&maxContextChars, "max-context-chars", 24000, "Approximate max characters sent as chat context")
 
 	rootCmd.AddCommand(chatCmd)
 }

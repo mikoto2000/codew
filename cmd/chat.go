@@ -65,6 +65,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	fmt.Printf("Connected target: %s\n", chatHost)
 	fmt.Printf("Model: %s\n", s.Model)
 	fmt.Printf("Tools: %t (auto-approve=%t)\n", toolsEnabled, autoApprove)
+	fmt.Printf("Context limit: %d chars\n", maxContextChars)
 	fmt.Printf("Session file: %s (auto-save=%t)\n", sessionPath, autoSave)
 	fmt.Println("Commands: /exit, /model <name>, /system <text>, /reset, /save, /load, /help")
 
@@ -108,8 +109,9 @@ func runChat(cmd *cobra.Command, _ []string) error {
 
 		finalPrinted := false
 		for step := 0; step < maxToolSteps; step++ {
+			messages := s.MessagesForModel(maxContextChars)
 			ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
-			msg, chatErr := client.Chat(ctx, s.Model, s.Messages(), toolDefs)
+			msg, chatErr := client.Chat(ctx, s.Model, messages, toolDefs)
 			cancel()
 
 			if chatErr != nil {

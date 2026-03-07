@@ -27,6 +27,7 @@ go build -o codew .
 - `--session-file` (default: `.codew/session.json`)
 - `--resume` (default: `false`)
 - `--auto-save` (default: `true`)
+- `--max-context-chars` (default: `24000`)
 
 ## Environment Variables
 
@@ -86,6 +87,11 @@ index 1111111..2222222 100644
 - `--auto-save=true` の場合、各ターン後に `--session-file` へ履歴を保存します。
 - `--resume` を指定すると起動時に `--session-file` を読み込みます。
 - チャット中でも `/save` と `/load` で明示的に保存・復元できます。
+
+## Context Compression
+
+- `--max-context-chars` を超える履歴は、古いメッセージを要約して圧縮してからモデルに送信します。
+- 直近メッセージを優先し、古い履歴は summary メッセージに畳み込みます。
 
 ## Notes
 
