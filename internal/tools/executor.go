@@ -109,6 +109,21 @@ func Definitions() []ollama.ToolDefinition {
 				},
 			},
 		},
+		{
+			Type: "function",
+			Function: ollama.ToolDefinitionFunc{
+				Name:        "apply_patch",
+				Description: "Apply a unified diff patch safely after validation.",
+				Parameters: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"patch":      map[string]any{"type": "string"},
+						"check_only": map[string]any{"type": "boolean"},
+					},
+					"required": []string{"patch"},
+				},
+			},
+		},
 	}
 }
 
@@ -138,6 +153,8 @@ func (e *Executor) Execute(call ollama.ToolCall) string {
 		payload, err = e.writeFile(call.Function.Arguments)
 	case "replace_in_file":
 		payload, err = e.replaceInFile(call.Function.Arguments)
+	case "apply_patch":
+		payload, err = e.applyPatch(call.Function.Arguments)
 	default:
 		err = fmt.Errorf("unknown tool: %s", call.Function.Name)
 	}
@@ -384,6 +401,48 @@ func (e *Executor) replaceInFile(raw json.RawMessage) (map[string]any, error) {
 	}, nil
 }
 
+type applyPatchArgs struct {
+	Patch     string `json:"patch"`
+	CheckOnly bool   `json:"check_only"`
+}
+
+func (e *Executor) applyPatch(raw json.RawMessage) (map[string]any, error) {
+	var in applyPatchArgs
+	if err := decodeArgs(raw, &in); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(in.Patch) == "" {
+		return nil, errors.New("patch is required")
+	}
+
+	files, err := e.patchTargets(in.Patch)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := runCommandWithInput("git", []string{"-C", e.workspace, "apply", "--check", "--whitespace=nowarn", "-"}, in.Patch); err != nil {
+		return nil, fmt.Errorf("patch check failed: %w", err)
+	}
+
+	if in.CheckOnly {
+		return map[string]any{
+			"checked": true,
+			"applied": false,
+			"files":   files,
+		}, nil
+	}
+
+	if _, err := runCommandWithInput("git", []string{"-C", e.workspace, "apply", "--whitespace=nowarn", "-"}, in.Patch); err != nil {
+		return nil, fmt.Errorf("patch apply failed: %w", err)
+	}
+
+	return map[string]any{
+		"checked": true,
+		"applied": true,
+		"files":   files,
+	}, nil
+}
+
 func decodeArgs(raw json.RawMessage, out any) error {
 	if len(raw) == 0 {
 		return errors.New("arguments are required")
@@ -409,6 +468,51 @@ func decodeArgs(raw json.RawMessage, out any) error {
 		return fmt.Errorf("decode args: %w", err)
 	}
 	return nil
+}
+
+func runCommandWithInput(bin string, args []string, stdin string) (string, error) {
+	cmd := exec.Command(bin, args...)
+	cmd.Stdin = strings.NewReader(stdin)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		if stderr.Len() > 0 {
+			return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+		}
+		return "", err
+	}
+	return string(out), nil
+}
+
+func (e *Executor) patchTargets(patch string) ([]string, error) {
+	lines := strings.Split(patch, "\n")
+	seen := map[string]struct{}{}
+	out := []string{}
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "+++ ") || strings.HasPrefix(line, "--- ") {
+			path := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(line, "+++ "), "--- "))
+			if path == "" || path == "/dev/null" {
+				continue
+			}
+			if strings.HasPrefix(path, "a/") || strings.HasPrefix(path, "b/") {
+				path = path[2:]
+			}
+			path = strings.Split(path, "\t")[0]
+			path = strings.Trim(path, "\"")
+
+			if _, err := e.resolvePath(path); err != nil {
+				return nil, fmt.Errorf("invalid patch path %q: %w", path, err)
+			}
+			if _, ok := seen[path]; !ok {
+				seen[path] = struct{}{}
+				out = append(out, path)
+			}
+		}
+	}
+	return out, nil
 }
 
 func (e *Executor) resolvePath(path string) (string, error) {

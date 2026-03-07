@@ -23,6 +23,7 @@ const toolPromptSuffix = `
 If you need to use a tool, respond with JSON only (no markdown), using one of these formats:
 {"name":"tool_name","arguments":{...}}
 {"tool_calls":[{"name":"tool_name","arguments":{...}}]}
+For file edits, prefer apply_patch over full-file overwrite when possible.
 After receiving tool results, provide a normal final answer for the user.
 `
 

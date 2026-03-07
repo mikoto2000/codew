@@ -49,6 +49,24 @@ go build -o codew .
 - `read_file` (`path`)
 - `write_file` (`path`, `content`)
 - `replace_in_file` (`path`, `old`, `new`, `replace_all`)
+- `apply_patch` (`patch`, `check_only`)
+
+### Safe Edit (`apply_patch`)
+
+`apply_patch` は unified diff を受け取り、先に `git apply --check` で検証してから適用します。  
+`check_only=true` を指定すると検証のみ実行します。
+
+例:
+
+```diff
+diff --git a/README.md b/README.md
+index 1111111..2222222 100644
+--- a/README.md
++++ b/README.md
+@@ -1,1 +1,1 @@
+-# old
++# new
+```
 
 ツール実行はデフォルトで都度承認です。全自動にする場合:
 
