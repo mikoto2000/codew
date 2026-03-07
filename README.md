@@ -28,61 +28,67 @@ go build -o codew .
 
 ## Flags
 
-- `--host` (default: `http://127.0.0.1:11434`)
-- `--model` (default: `llama3.2`)
-- `--system`
-- `--timeout`
-- `--tools` (default: `true`)
-- `--auto-approve` (default: `false`)
-- `--workspace` (default: `.`)
-- `--max-tool-steps` (default: `8`)
-- `--session-file` (default: `.codew/session.json`)
-- `--resume` (default: `false`)
-- `--auto-save` (default: `true`)
-- `--max-context-chars` (default: `24000`)
-- `--tool-profile` (default: `workspace-write`)
-- `--auto-validate` (default: `false`)
-- `--post-edit-cmd` (default: `go test ./...`, 複数指定可)
-- `--retries` (default: `2`)
-- `--retry-backoff` (default: `2s`)
-- `--fallback-model` (default: empty)
-- `--auto-context` (default: `true`)
-- `--auto-context-files` (default: `4`)
-- `--auto-context-chars` (default: `8000`)
-- `--dry-run` (default: `false`)
-- `--auto-checkpoint` (default: `true`)
-- `--tool-log` (default: `true`)
-- `--tool-log-file` (default: `.codew/tool_logs.jsonl`)
-- `--model-profile` (default: empty, `coding-fast` | `coding-safe` | `research`)
-- `--mcp` (default: `false`)
-- `--mcp-config` (default: `.codew/mcp.json`)
-- `--sandbox-mode` (default: `workspace-write`, `read-only` | `workspace-write` | `full`)
-- `--network-allow` (default: `false`)
-- `--network-allow-tool` (specific tool names for network escalation)
-- `--trace-log` (default: `true`)
-- `--trace-log-file` (default: `.codew/turn_traces.jsonl`)
+| Flag | 概要 | Default |
+| --- | --- | --- |
+| `--host` | Ollama API の接続先 URL を指定します。 | `http://127.0.0.1:11434` |
+| `--model` | 利用する既定モデル名を指定します。 | `llama3.2` |
+| `--system` | システムプロンプト文を上書きします。 | (none) |
+| `--timeout` | API リクエストのタイムアウト時間です。 | `120s` |
+| `--tools` | ツール呼び出し機能の有効/無効を切り替えます。 | `true` |
+| `--auto-approve` | ツール実行時の承認確認を省略します。 | `false` |
+| `--workspace` | ツール操作の基準となるワークスペースルートです。 | `.` |
+| `--max-tool-steps` | 1ターン内のツール呼び出しラウンド上限です。 | `8` |
+| `--session-file` | 会話履歴の保存/復元先ファイルです。 | `.codew/session.json` |
+| `--resume` | 起動時に `--session-file` からセッションを復元します。 | `false` |
+| `--auto-save` | 各ターン後にセッションを自動保存します。 | `true` |
+| `--max-context-chars` | モデル送信前の会話文脈の最大文字数目安です。 | `24000` |
+| `--tool-profile` | 利用可能ツール範囲のプリセット権限です。 | `workspace-write` |
+| `--auto-validate` | 編集系ツール成功後に検証コマンドを自動実行します。 | `false` |
+| `--post-edit-cmd` | 編集後に実行する検証コマンド（複数指定可）です。 | `go test ./...` |
+| `--retries` | API 失敗時の再試行回数です。 | `2` |
+| `--retry-backoff` | 再試行間隔のベースバックオフ時間です。 | `2s` |
+| `--fallback-model` | 再試行失敗時に切り替える予備モデルです。 | empty |
+| `--auto-context` | 入力ごとに関連ファイルを自動で文脈注入します。 | `true` |
+| `--auto-context-files` | 自動注入するファイル数の上限です。 | `4` |
+| `--auto-context-chars` | 自動注入する合計文字数の上限です。 | `8000` |
+| `--dry-run` | 編集ツールを実適用せず計画のみ返します。 | `false` |
+| `--auto-checkpoint` | 編集前に自動チェックポイントを作成します。 | `true` |
+| `--tool-log` | ツール実行ログ（JSONL）出力を有効化します。 | `true` |
+| `--tool-log-file` | ツール実行ログの出力先ファイルです。 | `.codew/tool_logs.jsonl` |
+| `--model-profile` | モデル/システム/権限などの推奨設定を一括適用します。 | empty (`coding-fast` \| `coding-safe` \| `research`) |
+| `--mcp` | MCP クライアント連携ツールを有効化します。 | `false` |
+| `--mcp-config` | MCP サーバー設定 JSON のパスです。 | `.codew/mcp.json` |
+| `--sandbox-mode` | ツール実行時のサンドボックス権限レベルです。 | `workspace-write` (`read-only` \| `workspace-write` \| `full`) |
+| `--network-allow` | セッション全体でネットワーク昇格を許可します。 | `false` |
+| `--network-allow-tool` | 指定ツール名に限定してネットワーク昇格を許可します。 | (none) |
+| `--trace-log` | ターン単位トレースログ（JSONL）を出力します。 | `true` |
+| `--trace-log-file` | ターン単位トレースログの出力先ファイルです。 | `.codew/turn_traces.jsonl` |
 
 ## Environment Variables
 
-- `OLLAMA_HOST`
-- `OLLAMA_MODEL`
-- `OLLAMA_SYSTEM`
+| Variable | 概要 | Default |
+| --- | --- | --- |
+| `OLLAMA_HOST` | Ollama API 接続先を `--host` の初期値として設定します。 | `http://127.0.0.1:11434` |
+| `OLLAMA_MODEL` | 既定モデル名を `--model` の初期値として設定します。 | `llama3.2` |
+| `OLLAMA_SYSTEM` | システムプロンプトを `--system` の初期値として設定します。 | `You are a coding assistant.` |
 
 ## In-chat Commands
 
-- `/help`
-- `/model <name>`
-- `/system <text>`
-- `/reset`
-- `/save`
-- `/load`
-- `/checkpoint`
-- `/undo`
-- `/plan <step>`
-- `/plan-list`
-- `/plan-doing <index>`
-- `/plan-done <index>`
-- `/exit` or `/quit`
+| Command | 概要 | Default |
+| --- | --- | --- |
+| `/help` | 利用可能なコマンド一覧を表示します。 | `-` |
+| `/model <name>` | 現在セッションで使うモデルを切り替えます。 | `-` |
+| `/system <text>` | 現在セッションのシステムプロンプトを更新します。 | `-` |
+| `/reset` | 会話コンテキストをリセットします。 | `-` |
+| `/save` | 現在のセッションを `--session-file` に保存します。 | `-` |
+| `/load` | `--session-file` からセッションを読み込みます。 | `-` |
+| `/checkpoint` | 現在状態のチェックポイントを作成します。 | `-` |
+| `/undo` | 最新のチェックポイント状態へ戻します。 | `-` |
+| `/plan <step>` | 計画にステップを追加します。 | `-` |
+| `/plan-list` | 計画ステップ一覧を表示します。 | `-` |
+| `/plan-doing <index>` | 指定ステップを進行中に更新します。 | `-` |
+| `/plan-done <index>` | 指定ステップを完了に更新します。 | `-` |
+| `/exit` or `/quit` | セッションを終了します。 | `-` |
 
 入力履歴ナビゲーション:
 - `↑` / `↓`
