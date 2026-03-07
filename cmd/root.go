@@ -77,5 +77,6 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&modelProfile, "model-profile", "", "Preset profile: coding-fast | coding-safe | research")
 
 	rootCmd.AddCommand(chatCmd)
+	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(doctorCmd)
 }

@@ -11,6 +11,7 @@ go build -o codew .
 ## Commands
 
 - `codew` / `codew chat`: interactive chat
+- `codew run "<prompt>"`: non-interactive single-shot
 - `codew doctor`: environment diagnostics
 
 ## Run
@@ -193,6 +194,15 @@ index 1111111..2222222 100644
 - 指定モデルの存在
 - ワークスペース書き込み可否
 - git 状態（clean/dirty）
+
+## Non-interactive Mode
+
+```bash
+codew run "このリポジトリで TODO の進め方を提案して"
+```
+
+- CI やスクリプト向けに 1 プロンプト実行して終了します。
+- 通常のツール呼び出しループ（`max-tool-steps` まで）も利用します。
 
 ## Notes
 

@@ -23,5 +23,5 @@
 - [x] `codew doctor` コマンド
   - Ollama接続、モデル存在、権限、git状態を一発診断する
 
-- [ ] `non-interactive` モード
+- [x] `non-interactive` モード
   - `codew run "..."` でCIやスクリプトから使えるようにする
