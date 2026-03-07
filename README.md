@@ -168,6 +168,7 @@ index 1111111..2222222 100644
 
 - `--dry-run` を有効化すると、編集系ツールは実適用せず実行計画のみ返します。
 - `write_file` / `replace_in_file` / `apply_patch` は `dry_run=true` の結果を返します。
+- `apply_patch` は失敗時に `--3way` とファイル単位分割適用へフォールバックします。
 
 ## Tool Execution Logs
 

@@ -568,7 +568,23 @@ func (e *Executor) applyPatch(raw json.RawMessage) (map[string]any, error) {
 	}
 
 	if _, err := runCommandWithInput("git", []string{"-C", e.workspace, "apply", "--check", "--whitespace=nowarn", "-"}, in.Patch); err != nil {
-		return nil, fmt.Errorf("patch check failed: %w", err)
+		// Fallback 1: try 3-way merge check.
+		if _, err3 := runCommandWithInput("git", []string{"-C", e.workspace, "apply", "--check", "--3way", "--whitespace=nowarn", "-"}, in.Patch); err3 != nil {
+			// Fallback 2: split by file and check each chunk.
+			chunks := splitPatchByFile(in.Patch)
+			if len(chunks) <= 1 {
+				return nil, fmt.Errorf("patch check failed: %w", err)
+			}
+			failed := []string{}
+			for _, chunk := range chunks {
+				if _, chunkErr := runCommandWithInput("git", []string{"-C", e.workspace, "apply", "--check", "--whitespace=nowarn", "-"}, chunk); chunkErr != nil {
+					failed = append(failed, chunkErr.Error())
+				}
+			}
+			if len(failed) > 0 {
+				return nil, fmt.Errorf("patch check failed (chunked): %s", strings.Join(failed, " | "))
+			}
+		}
 	}
 
 	if in.CheckOnly {
@@ -580,6 +596,39 @@ func (e *Executor) applyPatch(raw json.RawMessage) (map[string]any, error) {
 	}
 
 	if _, err := runCommandWithInput("git", []string{"-C", e.workspace, "apply", "--whitespace=nowarn", "-"}, in.Patch); err != nil {
+		// Fallback 1: 3-way apply.
+		if _, err3 := runCommandWithInput("git", []string{"-C", e.workspace, "apply", "--3way", "--whitespace=nowarn", "-"}, in.Patch); err3 == nil {
+			return map[string]any{
+				"checked":   true,
+				"applied":   true,
+				"files":     files,
+				"fallback":  "3way",
+				"recovered": true,
+			}, nil
+		}
+		// Fallback 2: file-by-file apply.
+		chunks := splitPatchByFile(in.Patch)
+		if len(chunks) > 1 {
+			applied := 0
+			failed := []string{}
+			for _, chunk := range chunks {
+				if _, chunkErr := runCommandWithInput("git", []string{"-C", e.workspace, "apply", "--whitespace=nowarn", "-"}, chunk); chunkErr != nil {
+					failed = append(failed, chunkErr.Error())
+				} else {
+					applied++
+				}
+			}
+			if applied > 0 && len(failed) == 0 {
+				return map[string]any{
+					"checked":   true,
+					"applied":   true,
+					"files":     files,
+					"fallback":  "chunked",
+					"recovered": true,
+				}, nil
+			}
+			return nil, fmt.Errorf("patch apply failed (chunked): applied=%d failed=%d", applied, len(failed))
+		}
 		return nil, fmt.Errorf("patch apply failed: %w", err)
 	}
 
@@ -754,6 +803,23 @@ func flattenTopics(in []ddgTopic) []ddgTopic {
 		out = append(out, t)
 	}
 	return out
+}
+
+func splitPatchByFile(patch string) []string {
+	lines := strings.Split(patch, "\n")
+	chunks := []string{}
+	current := []string{}
+	for _, line := range lines {
+		if strings.HasPrefix(line, "diff --git ") && len(current) > 0 {
+			chunks = append(chunks, strings.Join(current, "\n"))
+			current = []string{}
+		}
+		current = append(current, line)
+	}
+	if len(current) > 0 {
+		chunks = append(chunks, strings.Join(current, "\n"))
+	}
+	return chunks
 }
 
 func (e *Executor) resolvePath(path string) (string, error) {
