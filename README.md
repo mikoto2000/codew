@@ -71,6 +71,10 @@ go build -o codew .
 - `/load`
 - `/checkpoint`
 - `/undo`
+- `/plan <step>`
+- `/plan-list`
+- `/plan-doing <index>`
+- `/plan-done <index>`
 - `/exit` or `/quit`
 
 入力履歴ナビゲーション:

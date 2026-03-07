@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +25,7 @@ import (
 	"ollama-codex-cli/internal/mcp"
 	"ollama-codex-cli/internal/modelprofile"
 	"ollama-codex-cli/internal/ollama"
+	"ollama-codex-cli/internal/plan"
 	"ollama-codex-cli/internal/session"
 	"ollama-codex-cli/internal/tools"
 )
@@ -136,6 +138,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 
 	approveAll := autoApprove
 	networkRules := map[string]bool{}
+	planner := plan.New()
 	for _, t := range networkAllowTool {
 		t = strings.TrimSpace(t)
 		if t != "" {
@@ -161,7 +164,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 		lineEditor.AppendHistory(line)
 
 		if strings.HasPrefix(line, "/") {
-			done, cmdErr := runCommand(line, s, sessionPath, checkpoints)
+			done, cmdErr := runCommand(line, s, sessionPath, checkpoints, planner)
 			if cmdErr != nil {
 				fmt.Fprintf(os.Stderr, "command error: %v\n", cmdErr)
 			} else if autoSave {
@@ -363,7 +366,7 @@ func compactJSON(raw json.RawMessage) string {
 	return out.String()
 }
 
-func runCommand(line string, s *session.Session, sessionPath string, checkpoints *checkpoint.Manager) (bool, error) {
+func runCommand(line string, s *session.Session, sessionPath string, checkpoints *checkpoint.Manager, planner *plan.State) (bool, error) {
 	parts := strings.SplitN(line, " ", 2)
 	name := parts[0]
 	arg := ""
@@ -402,6 +405,10 @@ func runCommand(line string, s *session.Session, sessionPath string, checkpoints
 		fmt.Println("/load          : load current session file")
 		fmt.Println("/checkpoint    : create rollback checkpoint")
 		fmt.Println("/undo          : restore latest checkpoint")
+		fmt.Println("/plan <step>   : add plan item")
+		fmt.Println("/plan-list     : show plan")
+		fmt.Println("/plan-doing N  : mark item N in progress")
+		fmt.Println("/plan-done N   : mark item N completed")
 		return false, nil
 	case "/save":
 		if err := saveSessionSnapshot(sessionPath, s); err != nil {
@@ -431,6 +438,28 @@ func runCommand(line string, s *session.Session, sessionPath string, checkpoints
 		}
 		fmt.Printf("restored checkpoint: %s\n", id)
 		return false, nil
+	case "/plan":
+		if arg == "" {
+			return false, errors.New("usage: /plan <step>")
+		}
+		planner.Add(arg)
+		fmt.Println("plan item added")
+		return false, nil
+	case "/plan-list":
+		fmt.Print(planner.Render())
+		return false, nil
+	case "/plan-doing":
+		idx, err := parsePositiveInt(arg)
+		if err != nil {
+			return false, err
+		}
+		return false, planner.Set(idx, plan.InProgress)
+	case "/plan-done":
+		idx, err := parsePositiveInt(arg)
+		if err != nil {
+			return false, err
+		}
+		return false, planner.Set(idx, plan.Completed)
 	default:
 		return false, fmt.Errorf("unknown command: %s", name)
 	}
@@ -438,6 +467,18 @@ func runCommand(line string, s *session.Session, sessionPath string, checkpoints
 
 func saveSessionSnapshot(path string, s *session.Session) error {
 	return session.SaveToFile(path, s.Snapshot())
+}
+
+func parsePositiveInt(raw string) (int, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, errors.New("index is required")
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		return 0, errors.New("index must be positive integer")
+	}
+	return n, nil
 }
 
 func summarizeToolResult(raw string) string {
