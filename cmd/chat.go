@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/peterh/liner"
@@ -176,6 +177,16 @@ func runChat(cmd *cobra.Command, _ []string) error {
 			if toolsEnabled && len(toolCalls) > 0 {
 				msg.ToolCalls = toolCalls
 				s.AddAssistantMessage(msg)
+				if canRunInParallel(toolCalls) {
+					results := runToolCallsParallel(executor, toolCalls)
+					for i, call := range toolCalls {
+						toolResult := results[i]
+						s.AddTool(call.Function.Name, call.ID, toolResult)
+						fmt.Printf("\n[tool:%s] %s\n", call.Function.Name, summarizeToolResult(toolResult))
+						writeToolLog(toolLogger, line, call.Function.Name, compactJSON(call.Function.Arguments), toolResult, true)
+					}
+					continue
+				}
 
 				for _, call := range toolCalls {
 					if !approveAll {
@@ -549,6 +560,43 @@ func withAutoContext(messages []ollama.Message, autoCtx string) []ollama.Message
 	out = append(out, ollama.Message{Role: "system", Content: autoCtx})
 	out = append(out, last)
 	return out
+}
+
+func canRunInParallel(calls []ollama.ToolCall) bool {
+	if len(calls) < 2 {
+		return false
+	}
+	for _, c := range calls {
+		if !isParallelSafeTool(c.Function.Name) {
+			return false
+		}
+	}
+	return true
+}
+
+func isParallelSafeTool(name string) bool {
+	switch name {
+	case "read_file", "list_files", "web_search":
+		return true
+	default:
+		return false
+	}
+}
+
+func runToolCallsParallel(executor *tools.Executor, calls []ollama.ToolCall) []string {
+	results := make([]string, len(calls))
+	var wg sync.WaitGroup
+	wg.Add(len(calls))
+	for i, call := range calls {
+		i := i
+		call := call
+		go func() {
+			defer wg.Done()
+			results[i] = executor.Execute(call)
+		}()
+	}
+	wg.Wait()
+	return results
 }
 
 func buildSystemPrompt(base string, enableTools bool) string {
