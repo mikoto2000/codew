@@ -259,7 +259,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 func askToolApproval(lineEditor *liner.State, call ollama.ToolCall, preview string) (approved bool, allowAll bool) {
 	args := compactJSON(call.Function.Arguments)
 	if preview != "" {
-		fmt.Printf("\n[tool:%s preview]\n%s\n", call.Function.Name, preview)
+		fmt.Printf("\n[tool:%s preview]\n%s\n", call.Function.Name, colorizeDiff(preview))
 	}
 	line, err := lineEditor.Prompt(fmt.Sprintf("approve tool %s args=%s ? [y/N/a]: ", call.Function.Name, args))
 	if err != nil {
@@ -597,6 +597,29 @@ func runToolCallsParallel(executor *tools.Executor, calls []ollama.ToolCall) []s
 	}
 	wg.Wait()
 	return results
+}
+
+func colorizeDiff(text string) string {
+	lines := strings.Split(text, "\n")
+	var out strings.Builder
+	for i, line := range lines {
+		colored := line
+		switch {
+		case strings.HasPrefix(line, "+++"), strings.HasPrefix(line, "---"):
+			colored = "\x1b[36m" + line + "\x1b[0m"
+		case strings.HasPrefix(line, "@@"):
+			colored = "\x1b[33m" + line + "\x1b[0m"
+		case strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++"):
+			colored = "\x1b[32m" + line + "\x1b[0m"
+		case strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---"):
+			colored = "\x1b[31m" + line + "\x1b[0m"
+		}
+		out.WriteString(colored)
+		if i != len(lines)-1 {
+			out.WriteString("\n")
+		}
+	}
+	return out.String()
 }
 
 func buildSystemPrompt(base string, enableTools bool) string {
