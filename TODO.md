@@ -18,7 +18,7 @@
 
 ## Medium Priority
 
-- [ ] ツール権限の細分化を追加する
+- [x] ツール権限の細分化を追加する
   - 例: `read-only` / `workspace-write` / `network`
 
 - [ ] 長時間コマンドの PTY 対応を追加する

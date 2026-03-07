@@ -20,14 +20,15 @@ const maxOutputChars = 12000
 
 type Executor struct {
 	workspace string
+	profile   string
 }
 
-func NewExecutor(workspace string) (*Executor, error) {
+func NewExecutor(workspace string, profile string) (*Executor, error) {
 	abs, err := filepath.Abs(workspace)
 	if err != nil {
 		return nil, fmt.Errorf("resolve workspace: %w", err)
 	}
-	return &Executor{workspace: abs}, nil
+	return &Executor{workspace: abs, profile: NormalizeProfile(profile)}, nil
 }
 
 func Definitions() []ollama.ToolDefinition {
@@ -128,15 +129,17 @@ func Definitions() []ollama.ToolDefinition {
 }
 
 func AllowedToolNames() map[string]struct{} {
-	out := map[string]struct{}{}
-	for _, def := range Definitions() {
-		out[def.Function.Name] = struct{}{}
-	}
-	return out
+	return AllowedToolNamesForProfile(ProfileFull)
 }
 
 func (e *Executor) Execute(call ollama.ToolCall) string {
 	result := map[string]any{"tool": call.Function.Name}
+	if !IsToolAllowed(e.profile, call.Function.Name) {
+		result["ok"] = false
+		result["error"] = fmt.Sprintf("tool %q is not allowed in profile %q", call.Function.Name, e.profile)
+		data, _ := json.Marshal(result)
+		return string(data)
+	}
 
 	var (
 		payload map[string]any

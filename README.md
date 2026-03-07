@@ -28,6 +28,7 @@ go build -o codew .
 - `--resume` (default: `false`)
 - `--auto-save` (default: `true`)
 - `--max-context-chars` (default: `24000`)
+- `--tool-profile` (default: `workspace-write`)
 
 ## Environment Variables
 
@@ -92,6 +93,12 @@ index 1111111..2222222 100644
 
 - `--max-context-chars` を超える履歴は、古いメッセージを要約して圧縮してからモデルに送信します。
 - 直近メッセージを優先し、古い履歴は summary メッセージに畳み込みます。
+
+## Tool Permission Profiles
+
+- `read-only`: `list_files`, `read_file`
+- `workspace-write`: 上記 + `write_file`, `replace_in_file`, `apply_patch`
+- `full`: すべてのツール（`shell_exec` など）
 
 ## Notes
 

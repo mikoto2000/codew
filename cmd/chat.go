@@ -36,7 +36,8 @@ var chatCmd = &cobra.Command{
 
 func runChat(cmd *cobra.Command, _ []string) error {
 	client := ollama.NewClient(chatHost, timeout)
-	executor, err := tools.NewExecutor(workspaceRoot)
+	profile := tools.NormalizeProfile(toolProfile)
+	executor, err := tools.NewExecutor(workspaceRoot, profile)
 	if err != nil {
 		return err
 	}
@@ -58,13 +59,14 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	toolDefs := []ollama.ToolDefinition(nil)
 	allowed := map[string]struct{}{}
 	if toolsEnabled {
-		toolDefs = tools.Definitions()
-		allowed = tools.AllowedToolNames()
+		toolDefs = tools.DefinitionsForProfile(profile)
+		allowed = tools.AllowedToolNamesForProfile(profile)
 	}
 
 	fmt.Printf("Connected target: %s\n", chatHost)
 	fmt.Printf("Model: %s\n", s.Model)
 	fmt.Printf("Tools: %t (auto-approve=%t)\n", toolsEnabled, autoApprove)
+	fmt.Printf("Tool profile: %s\n", profile)
 	fmt.Printf("Context limit: %d chars\n", maxContextChars)
 	fmt.Printf("Session file: %s (auto-save=%t)\n", sessionPath, autoSave)
 	fmt.Println("Commands: /exit, /model <name>, /system <text>, /reset, /save, /load, /help")

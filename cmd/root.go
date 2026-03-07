@@ -19,6 +19,7 @@ var (
 	resumeSession   bool
 	autoSave        bool
 	maxContextChars int
+	toolProfile     string
 )
 
 var rootCmd = &cobra.Command{
@@ -47,6 +48,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&resumeSession, "resume", false, "Load previous session from session-file on startup")
 	rootCmd.PersistentFlags().BoolVar(&autoSave, "auto-save", true, "Auto-save session after each turn")
 	rootCmd.PersistentFlags().IntVar(&maxContextChars, "max-context-chars", 24000, "Approximate max characters sent as chat context")
+	rootCmd.PersistentFlags().StringVar(&toolProfile, "tool-profile", "workspace-write", "Tool permission profile: read-only | workspace-write | full")
 
 	rootCmd.AddCommand(chatCmd)
 }
