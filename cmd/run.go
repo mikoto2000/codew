@@ -17,6 +17,7 @@ import (
 	"ollama-codex-cli/internal/mcp"
 	"ollama-codex-cli/internal/modelprofile"
 	"ollama-codex-cli/internal/ollama"
+	"ollama-codex-cli/internal/projectdetect"
 	"ollama-codex-cli/internal/session"
 	"ollama-codex-cli/internal/tools"
 )
@@ -44,6 +45,7 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 	if err != nil {
 		return err
 	}
+	project := projectdetect.Detect(workspaceAbs)
 	profile := tools.NormalizeProfile(toolProfile)
 	sandbox := tools.NormalizeSandboxMode(sandboxMode)
 	client := ollama.NewClient(chatHost, timeout)
@@ -91,7 +93,7 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 		}
 	}()
 
-	s := session.New(chatModel, buildSystemPrompt(systemText, toolsEnabled))
+	s := session.New(chatModel, buildSystemPrompt(withProjectHint(systemText, project), toolsEnabled))
 	s.AddUser(prompt)
 
 	autoCtx := ""

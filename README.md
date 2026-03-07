@@ -15,6 +15,11 @@ go build -o codew .
 - `codew doctor`: environment diagnostics
 - `codew review`: severity-ordered review of current changes
 
+## Project Type Detection
+
+- 起動時にプロジェクトルートのファイル一覧から種別（例: `go`, `nodejs`, `python` など）を判定します。
+- 判定結果は起動時表示とシステムプロンプト補助ヒントに使われます。
+
 ## Run
 
 ```bash

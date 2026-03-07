@@ -26,6 +26,7 @@ import (
 	"ollama-codex-cli/internal/modelprofile"
 	"ollama-codex-cli/internal/ollama"
 	"ollama-codex-cli/internal/plan"
+	"ollama-codex-cli/internal/projectdetect"
 	"ollama-codex-cli/internal/session"
 	"ollama-codex-cli/internal/tools"
 )
@@ -59,6 +60,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("resolve workspace: %w", err)
 	}
+	project := projectdetect.Detect(workspaceAbs)
 	mcpManager := mcp.NewManager()
 	if mcpEnabled {
 		mcpCtx, cancelMCP := context.WithTimeout(cmd.Context(), timeout)
@@ -90,7 +92,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	turnLogger := logging.NewTurnLogger(tracePath)
 	historyPath := filepath.Join(workspaceAbs, ".codew", "history.txt")
 
-	s := session.New(chatModel, buildSystemPrompt(systemText, toolsEnabled))
+	s := session.New(chatModel, buildSystemPrompt(withProjectHint(systemText, project), toolsEnabled))
 	if resumeSession {
 		snap, loadErr := session.LoadFromFile(sessionPath)
 		if loadErr != nil {
@@ -112,6 +114,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	}
 
 	fmt.Printf("Connected target: %s\n", chatHost)
+	fmt.Printf("Project type: %s (%s)\n", project.Primary, strings.Join(project.All, ","))
 	fmt.Printf("Model: %s\n", s.Model)
 	if modelProfile != "" {
 		fmt.Printf("Model profile: %s\n", modelProfile)
