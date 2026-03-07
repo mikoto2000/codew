@@ -37,6 +37,7 @@ go build -o codew .
 - `--auto-context` (default: `true`)
 - `--auto-context-files` (default: `4`)
 - `--auto-context-chars` (default: `8000`)
+- `--dry-run` (default: `false`)
 
 ## Environment Variables
 
@@ -142,6 +143,11 @@ index 1111111..2222222 100644
 - `--auto-context=true` の場合、ユーザー入力ごとに関連しそうなファイルをプロジェクト内から自動抽出します。
 - 抽出したファイル内容は一時的な system 文脈として注入されます（履歴には永続化しません）。
 - 件数と文字数は `--auto-context-files` / `--auto-context-chars` で制御できます。
+
+## Dry Run
+
+- `--dry-run` を有効化すると、編集系ツールは実適用せず実行計画のみ返します。
+- `write_file` / `replace_in_file` / `apply_patch` は `dry_run=true` の結果を返します。
 
 ## Notes
 

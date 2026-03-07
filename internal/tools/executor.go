@@ -24,14 +24,15 @@ const maxOutputChars = 12000
 type Executor struct {
 	workspace string
 	profile   string
+	dryRun    bool
 }
 
-func NewExecutor(workspace string, profile string) (*Executor, error) {
+func NewExecutor(workspace string, profile string, dryRun bool) (*Executor, error) {
 	abs, err := filepath.Abs(workspace)
 	if err != nil {
 		return nil, fmt.Errorf("resolve workspace: %w", err)
 	}
-	return &Executor{workspace: abs, profile: NormalizeProfile(profile)}, nil
+	return &Executor{workspace: abs, profile: NormalizeProfile(profile), dryRun: dryRun}, nil
 }
 
 func Definitions() []ollama.ToolDefinition {
@@ -159,6 +160,21 @@ func (e *Executor) Execute(call ollama.ToolCall) string {
 		data, _ := json.Marshal(result)
 		return string(data)
 	}
+	if e.dryRun && IsMutatingTool(call.Function.Name) {
+		plan, err := e.dryRunPlan(call)
+		if err != nil {
+			result["ok"] = false
+			result["error"] = err.Error()
+		} else {
+			result["ok"] = true
+			result["dry_run"] = true
+			for k, v := range plan {
+				result[k] = v
+			}
+		}
+		data, _ := json.Marshal(result)
+		return string(data)
+	}
 
 	var (
 		payload map[string]any
@@ -195,6 +211,56 @@ func (e *Executor) Execute(call ollama.ToolCall) string {
 
 	data, _ := json.Marshal(result)
 	return string(data)
+}
+
+func (e *Executor) dryRunPlan(call ollama.ToolCall) (map[string]any, error) {
+	switch call.Function.Name {
+	case "write_file":
+		var in writeArgs
+		if err := decodeArgs(call.Function.Arguments, &in); err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"plan":          "write_file",
+			"path":          in.Path,
+			"bytes_written": len(in.Content),
+		}, nil
+	case "replace_in_file":
+		var in replaceArgs
+		if err := decodeArgs(call.Function.Arguments, &in); err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"plan":        "replace_in_file",
+			"path":        in.Path,
+			"old_preview": trimForPlan(in.Old),
+			"new_preview": trimForPlan(in.New),
+			"replace_all": in.ReplaceAll,
+		}, nil
+	case "apply_patch":
+		var in applyPatchArgs
+		if err := decodeArgs(call.Function.Arguments, &in); err != nil {
+			return nil, err
+		}
+		files, err := e.patchTargets(in.Patch)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"plan":    "apply_patch",
+			"files":   files,
+			"preview": trimForPlan(in.Patch),
+		}, nil
+	default:
+		return nil, fmt.Errorf("dry-run not supported for tool: %s", call.Function.Name)
+	}
+}
+
+func trimForPlan(s string) string {
+	if len(s) <= 400 {
+		return s
+	}
+	return s[:400] + "\n...<truncated>"
 }
 
 type shellArgs struct {

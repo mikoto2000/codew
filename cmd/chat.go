@@ -44,7 +44,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("resolve workspace: %w", err)
 	}
-	executor, err := tools.NewExecutor(workspaceAbs, profile)
+	executor, err := tools.NewExecutor(workspaceAbs, profile, dryRun)
 	if err != nil {
 		return err
 	}
@@ -77,6 +77,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	fmt.Printf("Tool profile: %s\n", profile)
 	fmt.Printf("Context limit: %d chars\n", maxContextChars)
 	fmt.Printf("Auto context: %t (files=%d chars=%d)\n", autoContext, autoContextFiles, autoContextChars)
+	fmt.Printf("Dry run: %t\n", dryRun)
 	fmt.Printf("Retries: %d (backoff=%s, fallback=%s)\n", retries, retryBackoff, fallbackModel)
 	fmt.Printf("Session file: %s (auto-save=%t)\n", sessionPath, autoSave)
 	fmt.Println("Commands: /exit, /model <name>, /system <text>, /reset, /save, /load, /help")
