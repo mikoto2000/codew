@@ -101,4 +101,5 @@ func init() {
 	rootCmd.AddCommand(chatCmd)
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(doctorCmd)
+	rootCmd.AddCommand(reviewCmd)
 }

@@ -13,6 +13,7 @@ go build -o codew .
 - `codew` / `codew chat`: interactive chat
 - `codew run "<prompt>"`: non-interactive single-shot
 - `codew doctor`: environment diagnostics
+- `codew review`: severity-ordered review of current changes
 
 ## Run
 
@@ -200,6 +201,11 @@ index 1111111..2222222 100644
 - 指定モデルの存在
 - ワークスペース書き込み可否
 - git 状態（clean/dirty）
+
+## Review Mode
+
+- `codew review` は現在の `git diff` を対象に変更ファイルを `high/medium/low` で並べて表示します。
+- あわせて `*_test.go` の変更不足も簡易検出します。
 
 ## Non-interactive Mode
 
