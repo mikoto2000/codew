@@ -157,6 +157,7 @@ index 1111111..2222222 100644
 
 - `web_search` は DuckDuckGo Instant Answer API を使って検索結果を返します。
 - 外部ネットワークにアクセスできる環境で利用してください。
+- 各結果には `source_url` と `retrieved_at` を付与し、出典追跡できる形式で返します。
 
 ## Retry Strategy
 

@@ -35,6 +35,7 @@ If you need to use a tool, respond with JSON only (no markdown), using one of th
 {"name":"tool_name","arguments":{...}}
 {"tool_calls":[{"name":"tool_name","arguments":{...}}]}
 For file edits, prefer apply_patch over full-file overwrite when possible.
+When web_search results are used, include source URLs in your final answer.
 After receiving tool results, provide a normal final answer for the user.
 `
 

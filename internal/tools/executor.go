@@ -691,11 +691,14 @@ func (e *Executor) webSearch(raw json.RawMessage) (map[string]any, error) {
 	}
 
 	results := make([]map[string]string, 0, in.MaxResults)
+	retrievedAt := time.Now().UTC().Format(time.RFC3339)
 	if decoded.AbstractText != "" {
 		results = append(results, map[string]string{
-			"title":   decoded.Heading,
-			"url":     decoded.AbstractURL,
-			"snippet": decoded.AbstractText,
+			"title":        decoded.Heading,
+			"url":          decoded.AbstractURL,
+			"source_url":   decoded.AbstractURL,
+			"snippet":      decoded.AbstractText,
+			"retrieved_at": retrievedAt,
 		})
 	}
 
@@ -708,16 +711,19 @@ func (e *Executor) webSearch(raw json.RawMessage) (map[string]any, error) {
 			continue
 		}
 		results = append(results, map[string]string{
-			"title":   item.Text,
-			"url":     item.FirstURL,
-			"snippet": item.Text,
+			"title":        item.Text,
+			"url":          item.FirstURL,
+			"source_url":   item.FirstURL,
+			"snippet":      item.Text,
+			"retrieved_at": retrievedAt,
 		})
 	}
 
 	return map[string]any{
-		"query":   in.Query,
-		"count":   len(results),
-		"results": results,
+		"query":        in.Query,
+		"count":        len(results),
+		"retrieved_at": retrievedAt,
+		"results":      results,
 	}, nil
 }
 
