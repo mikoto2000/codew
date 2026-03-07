@@ -126,8 +126,10 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 	for step := 0; step < maxToolSteps; step++ {
 		messages := withAutoContext(s.MessagesForModel(maxContextChars), autoCtx)
 		ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
+		finishWorking := announceWorking("assistant is working")
 		msg, _, chatErr := chatWithRetry(ctx, client, s.Model, messages, toolDefs)
 		cancel()
+		finishWorking(chatErr == nil)
 		if chatErr != nil {
 			return chatErr
 		}

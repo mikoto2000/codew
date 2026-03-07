@@ -204,15 +204,15 @@ func runChat(cmd *cobra.Command, _ []string) error {
 				}
 			}
 		}
-		fmt.Print("assistant> ")
-
 		finalPrinted := false
 		turnCheckpointed := false
 		for step := 0; step < maxToolSteps; step++ {
 			messages := withAutoContext(s.MessagesForModel(maxContextChars), autoCtx)
 			ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
+			finishWorking := announceWorking("assistant is working")
 			msg, usedModel, chatErr := chatWithRetry(ctx, client, s.Model, messages, toolDefs)
 			cancel()
+			finishWorking(chatErr == nil)
 
 			if chatErr != nil {
 				fmt.Fprintf(os.Stderr, "\nrequest failed: %v\n", chatErr)
@@ -310,7 +310,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 			answer := strings.TrimSpace(msg.Content)
 			s.AddAssistantMessage(msg)
 			if answer != "" {
-				fmt.Print(answer)
+				fmt.Printf("assistant> %s", answer)
 				finalPrinted = true
 			}
 			break
