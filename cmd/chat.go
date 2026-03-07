@@ -21,6 +21,7 @@ import (
 	"ollama-codex-cli/internal/checkpoint"
 	"ollama-codex-cli/internal/contextloader"
 	"ollama-codex-cli/internal/logging"
+	"ollama-codex-cli/internal/modelprofile"
 	"ollama-codex-cli/internal/ollama"
 	"ollama-codex-cli/internal/session"
 	"ollama-codex-cli/internal/tools"
@@ -41,6 +42,12 @@ var chatCmd = &cobra.Command{
 }
 
 func runChat(cmd *cobra.Command, _ []string) error {
+	if err := modelprofile.Apply(modelProfile, &chatModel, &systemText, &toolProfile, &retries, func(name string) bool {
+		return cmd.Flags().Changed(name)
+	}); err != nil {
+		return err
+	}
+
 	client := ollama.NewClient(chatHost, timeout)
 	profile := tools.NormalizeProfile(toolProfile)
 	workspaceAbs, err := filepath.Abs(workspaceRoot)
@@ -82,6 +89,9 @@ func runChat(cmd *cobra.Command, _ []string) error {
 
 	fmt.Printf("Connected target: %s\n", chatHost)
 	fmt.Printf("Model: %s\n", s.Model)
+	if modelProfile != "" {
+		fmt.Printf("Model profile: %s\n", modelProfile)
+	}
 	fmt.Printf("Tools: %t (auto-approve=%t)\n", toolsEnabled, autoApprove)
 	fmt.Printf("Tool profile: %s\n", profile)
 	fmt.Printf("Context limit: %d chars\n", maxContextChars)

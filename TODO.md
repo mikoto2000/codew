@@ -17,7 +17,7 @@
 - [x] ファイル差分ビュー強化
   - 承認時に unified diff を色付きで表示する
 
-- [ ] モデルごとのプロファイル
+- [x] モデルごとのプロファイル
   - 既定 `system prompt` / `tool-profile` / `retries` をプリセット化する
 
 - [ ] `codew doctor` コマンド

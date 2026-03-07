@@ -41,6 +41,7 @@ go build -o codew .
 - `--auto-checkpoint` (default: `true`)
 - `--tool-log` (default: `true`)
 - `--tool-log-file` (default: `.codew/tool_logs.jsonl`)
+- `--model-profile` (default: empty, `coding-fast` | `coding-safe` | `research`)
 
 ## Environment Variables
 
@@ -171,6 +172,14 @@ index 1111111..2222222 100644
 
 - 承認プロンプト時の unified diff は ANSI 色付きで表示します。
 - `+` は緑、`-` は赤、`@@` は黄、`---/+++` ヘッダはシアン表示です。
+
+## Model Profiles
+
+- `coding-fast`: 速度重視のコーディング設定
+- `coding-safe`: 読み取り中心で慎重な設定
+- `research`: `web_search` 利用を想定した調査向け設定
+
+`--model-profile` を指定すると、未明示の `--model` / `--system` / `--tool-profile` / `--retries` をプリセットで補完します。
 
 ## Notes
 

@@ -32,6 +32,7 @@ var (
 	autoCheckpoint   bool
 	toolLog          bool
 	toolLogFile      string
+	modelProfile     string
 )
 
 var rootCmd = &cobra.Command{
@@ -73,6 +74,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&autoCheckpoint, "auto-checkpoint", true, "Create checkpoint before first edit tool in each turn")
 	rootCmd.PersistentFlags().BoolVar(&toolLog, "tool-log", true, "Write tool execution logs in JSONL format")
 	rootCmd.PersistentFlags().StringVar(&toolLogFile, "tool-log-file", ".codew/tool_logs.jsonl", "Path to tool execution JSONL log file")
+	rootCmd.PersistentFlags().StringVar(&modelProfile, "model-profile", "", "Preset profile: coding-fast | coding-safe | research")
 
 	rootCmd.AddCommand(chatCmd)
 }
