@@ -19,6 +19,7 @@ import (
 	"ollama-codex-cli/internal/agent"
 	"ollama-codex-cli/internal/checkpoint"
 	"ollama-codex-cli/internal/contextloader"
+	"ollama-codex-cli/internal/logging"
 	"ollama-codex-cli/internal/ollama"
 	"ollama-codex-cli/internal/session"
 	"ollama-codex-cli/internal/tools"
@@ -54,6 +55,11 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("resolve session-file: %w", err)
 	}
+	logPath := toolLogFile
+	if !filepath.IsAbs(logPath) {
+		logPath = filepath.Join(workspaceAbs, logPath)
+	}
+	toolLogger := logging.NewToolLogger(logPath)
 	historyPath := filepath.Join(workspaceAbs, ".codew", "history.txt")
 
 	s := session.New(chatModel, buildSystemPrompt(systemText, toolsEnabled))
@@ -81,6 +87,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	fmt.Printf("Auto context: %t (files=%d chars=%d)\n", autoContext, autoContextFiles, autoContextChars)
 	fmt.Printf("Dry run: %t\n", dryRun)
 	fmt.Printf("Auto checkpoint: %t\n", autoCheckpoint)
+	fmt.Printf("Tool log: %t (%s)\n", toolLog, logPath)
 	fmt.Printf("Retries: %d (backoff=%s, fallback=%s)\n", retries, retryBackoff, fallbackModel)
 	fmt.Printf("Session file: %s (auto-save=%t)\n", sessionPath, autoSave)
 	fmt.Println("Commands: /exit, /model <name>, /system <text>, /reset, /save, /load, /checkpoint, /undo, /help")
@@ -184,6 +191,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 							toolResult := `{"ok":false,"error":"tool call rejected by user"}`
 							s.AddTool(call.Function.Name, call.ID, toolResult)
 							fmt.Printf("\n[tool:%s] rejected\n", call.Function.Name)
+							writeToolLog(toolLogger, line, call.Function.Name, compactJSON(call.Function.Arguments), toolResult, false)
 							continue
 						}
 					}
@@ -201,10 +209,12 @@ func runChat(cmd *cobra.Command, _ []string) error {
 					toolResult := executor.Execute(call)
 					s.AddTool(call.Function.Name, call.ID, toolResult)
 					fmt.Printf("[tool:%s] %s\n", call.Function.Name, summarizeToolResult(toolResult))
+					writeToolLog(toolLogger, line, call.Function.Name, compactJSON(call.Function.Arguments), toolResult, true)
 					if autoValidate && tools.IsMutatingTool(call.Function.Name) && toolCallSucceeded(toolResult) {
 						validateResult := runValidation(workspaceAbs, postEditCmds)
 						s.AddTool("post_validate", "", validateResult)
 						fmt.Printf("[post-validate] %s\n", summarizeToolResult(validateResult))
+						writeToolLog(toolLogger, line, "post_validate", strings.Join(postEditCmds, " && "), validateResult, true)
 					}
 				}
 
@@ -474,6 +484,21 @@ func truncateOutput(s string, max int) string {
 		return s
 	}
 	return s[:max] + "\n...<truncated>"
+}
+
+func writeToolLog(logger *logging.ToolLogger, turnInput, toolName, args, result string, approved bool) {
+	if !toolLog || logger == nil {
+		return
+	}
+	if err := logger.Append(logging.ToolEvent{
+		TurnInput: turnInput,
+		Tool:      toolName,
+		Args:      args,
+		Result:    result,
+		Approved:  approved,
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: tool log failed: %v\n", err)
+	}
 }
 
 func chatWithRetry(ctx context.Context, client *ollama.Client, primaryModel string, messages []ollama.Message, defs []ollama.ToolDefinition) (ollama.Message, string, error) {

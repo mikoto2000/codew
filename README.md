@@ -39,6 +39,8 @@ go build -o codew .
 - `--auto-context-chars` (default: `8000`)
 - `--dry-run` (default: `false`)
 - `--auto-checkpoint` (default: `true`)
+- `--tool-log` (default: `true`)
+- `--tool-log-file` (default: `.codew/tool_logs.jsonl`)
 
 ## Environment Variables
 
@@ -154,6 +156,11 @@ index 1111111..2222222 100644
 
 - `--dry-run` を有効化すると、編集系ツールは実適用せず実行計画のみ返します。
 - `write_file` / `replace_in_file` / `apply_patch` は `dry_run=true` の結果を返します。
+
+## Tool Execution Logs
+
+- `--tool-log=true` の場合、各ツール呼び出しを JSONL で記録します。
+- ログには時刻、入力、ツール名、引数、結果、承認可否が含まれます。
 
 ## Notes
 

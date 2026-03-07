@@ -8,7 +8,7 @@
 - [x] `undo` / `checkpoint`
   - 自動で git stash/commit 的な巻き戻しポイントを作る
 
-- [ ] ツール実行ログの JSONL 出力
+- [x] ツール実行ログの JSONL 出力
   - 後から監査・再現しやすくする
 
 - [ ] 並列ツール実行

@@ -30,6 +30,8 @@ var (
 	autoContextChars int
 	dryRun           bool
 	autoCheckpoint   bool
+	toolLog          bool
+	toolLogFile      string
 )
 
 var rootCmd = &cobra.Command{
@@ -69,6 +71,8 @@ func init() {
 	rootCmd.PersistentFlags().IntVar(&autoContextChars, "auto-context-chars", 8000, "Max total characters for auto-loaded context per turn")
 	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "Do not apply edit tools, only show edit plan")
 	rootCmd.PersistentFlags().BoolVar(&autoCheckpoint, "auto-checkpoint", true, "Create checkpoint before first edit tool in each turn")
+	rootCmd.PersistentFlags().BoolVar(&toolLog, "tool-log", true, "Write tool execution logs in JSONL format")
+	rootCmd.PersistentFlags().StringVar(&toolLogFile, "tool-log-file", ".codew/tool_logs.jsonl", "Path to tool execution JSONL log file")
 
 	rootCmd.AddCommand(chatCmd)
 }
