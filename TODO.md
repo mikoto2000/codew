@@ -20,7 +20,7 @@
 - [x] モデルごとのプロファイル
   - 既定 `system prompt` / `tool-profile` / `retries` をプリセット化する
 
-- [ ] `codew doctor` コマンド
+- [x] `codew doctor` コマンド
   - Ollama接続、モデル存在、権限、git状態を一発診断する
 
 - [ ] `non-interactive` モード

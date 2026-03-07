@@ -8,6 +8,11 @@ Go で書いた、Codex CLI 風の対話 CLI です。接続先は Ollama API (`
 go build -o codew .
 ```
 
+## Commands
+
+- `codew` / `codew chat`: interactive chat
+- `codew doctor`: environment diagnostics
+
 ## Run
 
 ```bash
@@ -180,6 +185,14 @@ index 1111111..2222222 100644
 - `research`: `web_search` 利用を想定した調査向け設定
 
 `--model-profile` を指定すると、未明示の `--model` / `--system` / `--tool-profile` / `--retries` をプリセットで補完します。
+
+## Doctor
+
+`codew doctor` は以下をチェックします。
+- Ollama 接続 (`/api/tags`)
+- 指定モデルの存在
+- ワークスペース書き込み可否
+- git 状態（clean/dirty）
 
 ## Notes
 
