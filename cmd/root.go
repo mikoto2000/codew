@@ -42,6 +42,8 @@ var (
 	sandboxMode      string
 	networkAllow     bool
 	networkAllowTool []string
+	traceLog         bool
+	traceLogFile     string
 )
 
 var rootCmd = &cobra.Command{
@@ -97,6 +99,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&sandboxMode, "sandbox-mode", "workspace-write", "Sandbox permission mode: read-only | workspace-write | full")
 	rootCmd.PersistentFlags().BoolVar(&networkAllow, "network-allow", false, "Allow network tool escalation for this session")
 	rootCmd.PersistentFlags().StringSliceVar(&networkAllowTool, "network-allow-tool", nil, "Allow network escalation for specific tool names")
+	rootCmd.PersistentFlags().BoolVar(&traceLog, "trace-log", true, "Write turn-level execution traces")
+	rootCmd.PersistentFlags().StringVar(&traceLogFile, "trace-log-file", ".codew/turn_traces.jsonl", "Path to turn trace JSONL file")
 
 	rootCmd.AddCommand(chatCmd)
 	rootCmd.AddCommand(runCmd)

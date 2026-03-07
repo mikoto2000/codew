@@ -83,6 +83,11 @@ func runChat(cmd *cobra.Command, _ []string) error {
 		logPath = filepath.Join(workspaceAbs, logPath)
 	}
 	toolLogger := logging.NewToolLogger(logPath)
+	tracePath := traceLogFile
+	if !filepath.IsAbs(tracePath) {
+		tracePath = filepath.Join(workspaceAbs, tracePath)
+	}
+	turnLogger := logging.NewTurnLogger(tracePath)
 	historyPath := filepath.Join(workspaceAbs, ".codew", "history.txt")
 
 	s := session.New(chatModel, buildSystemPrompt(systemText, toolsEnabled))
@@ -121,6 +126,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	fmt.Printf("Dry run: %t\n", dryRun)
 	fmt.Printf("Auto checkpoint: %t\n", autoCheckpoint)
 	fmt.Printf("Tool log: %t (%s)\n", toolLog, logPath)
+	fmt.Printf("Trace log: %t (%s)\n", traceLog, tracePath)
 	fmt.Printf("Retries: %d (backoff=%s, fallback=%s)\n", retries, retryBackoff, fallbackModel)
 	fmt.Printf("Session file: %s (auto-save=%t)\n", sessionPath, autoSave)
 	fmt.Println("Commands: /exit, /model <name>, /system <text>, /reset, /save, /load, /checkpoint, /undo, /help")
@@ -180,6 +186,9 @@ func runChat(cmd *cobra.Command, _ []string) error {
 		}
 
 		s.AddUser(line)
+		turnStart := time.Now()
+		turnToolCalls := 0
+		turnErr := ""
 		autoCtx := ""
 		if autoContext {
 			ctxText, ctxErr := contextloader.Build(workspaceAbs, line, autoContextFiles, autoContextChars)
@@ -204,6 +213,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 
 			if chatErr != nil {
 				fmt.Fprintf(os.Stderr, "\nrequest failed: %v\n", chatErr)
+				turnErr = chatErr.Error()
 				if step == 0 {
 					s.RollbackLastUser()
 				}
@@ -224,6 +234,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 						s.AddTool(call.Function.Name, call.ID, toolResult)
 						fmt.Printf("\n[tool:%s] %s\n", call.Function.Name, summarizeToolResult(toolResult))
 						writeToolLog(toolLogger, line, call.Function.Name, compactJSON(call.Function.Arguments), toolResult, true)
+						turnToolCalls++
 					}
 					continue
 				}
@@ -243,6 +254,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 							s.AddTool(call.Function.Name, call.ID, toolResult)
 							fmt.Printf("\n[tool:%s] rejected\n", call.Function.Name)
 							writeToolLog(toolLogger, line, call.Function.Name, compactJSON(call.Function.Arguments), toolResult, false)
+							turnToolCalls++
 							continue
 						}
 					}
@@ -276,11 +288,13 @@ func runChat(cmd *cobra.Command, _ []string) error {
 					s.AddTool(call.Function.Name, call.ID, toolResult)
 					fmt.Printf("[tool:%s] %s\n", call.Function.Name, summarizeToolResult(toolResult))
 					writeToolLog(toolLogger, line, call.Function.Name, compactJSON(call.Function.Arguments), toolResult, true)
+					turnToolCalls++
 					if autoValidate && tools.IsMutatingTool(call.Function.Name) && toolCallSucceeded(toolResult) {
 						validateResult := runValidation(workspaceAbs, postEditCmds)
 						s.AddTool("post_validate", "", validateResult)
 						fmt.Printf("[post-validate] %s\n", summarizeToolResult(validateResult))
 						writeToolLog(toolLogger, line, "post_validate", strings.Join(postEditCmds, " && "), validateResult, true)
+						turnToolCalls++
 					}
 				}
 
@@ -303,6 +317,18 @@ func runChat(cmd *cobra.Command, _ []string) error {
 			fmt.Print("(no response)")
 		}
 		fmt.Println()
+		if traceLog {
+			if !finalPrinted {
+				turnErr = "no_response"
+			}
+			_ = turnLogger.Append(logging.TurnEvent{
+				Mode:       "chat",
+				Input:      line,
+				DurationMS: time.Since(turnStart).Milliseconds(),
+				ToolCalls:  turnToolCalls,
+				Error:      turnErr,
+			})
+		}
 		if autoSave {
 			if saveErr := saveSessionSnapshot(sessionPath, s); saveErr != nil {
 				fmt.Fprintf(os.Stderr, "warning: auto-save failed: %v\n", saveErr)

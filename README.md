@@ -54,6 +54,8 @@ go build -o codew .
 - `--sandbox-mode` (default: `workspace-write`, `read-only` | `workspace-write` | `full`)
 - `--network-allow` (default: `false`)
 - `--network-allow-tool` (specific tool names for network escalation)
+- `--trace-log` (default: `true`)
+- `--trace-log-file` (default: `.codew/turn_traces.jsonl`)
 
 ## Environment Variables
 
@@ -180,6 +182,11 @@ index 1111111..2222222 100644
 
 - `--tool-log=true` の場合、各ツール呼び出しを JSONL で記録します。
 - ログには時刻、入力、ツール名、引数、結果、承認可否が含まれます。
+
+## Turn Trace Logs
+
+- `--trace-log=true` の場合、ターン単位の実行トレースを JSONL で記録します。
+- 記録項目: mode(chat/run), input, duration_ms, tool_calls, error。
 
 ## Parallel Tool Execution
 

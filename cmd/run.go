@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -27,7 +28,7 @@ var runCmd = &cobra.Command{
 	RunE:  runOnce,
 }
 
-func runOnce(cmd *cobra.Command, args []string) error {
+func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 	if err := modelprofile.Apply(modelProfile, &chatModel, &systemText, &toolProfile, &retries, func(name string) bool {
 		return cmd.Flags().Changed(name)
 	}); err != nil {
@@ -67,6 +68,28 @@ func runOnce(cmd *cobra.Command, args []string) error {
 		logPath = filepath.Join(workspaceAbs, logPath)
 	}
 	toolLogger := logging.NewToolLogger(logPath)
+	tracePath := traceLogFile
+	if !filepath.IsAbs(tracePath) {
+		tracePath = filepath.Join(workspaceAbs, tracePath)
+	}
+	turnLogger := logging.NewTurnLogger(tracePath)
+	turnStart := time.Now()
+	turnToolCalls := 0
+	defer func() {
+		if traceLog {
+			errMsg := ""
+			if retErr != nil {
+				errMsg = retErr.Error()
+			}
+			_ = turnLogger.Append(logging.TurnEvent{
+				Mode:       "run",
+				Input:      prompt,
+				DurationMS: time.Since(turnStart).Milliseconds(),
+				ToolCalls:  turnToolCalls,
+				Error:      errMsg,
+			})
+		}
+	}()
 
 	s := session.New(chatModel, buildSystemPrompt(systemText, toolsEnabled))
 	s.AddUser(prompt)
@@ -138,10 +161,12 @@ func runOnce(cmd *cobra.Command, args []string) error {
 				res := results[i]
 				s.AddTool(call.Function.Name, call.ID, res)
 				writeToolLog(toolLogger, prompt, call.Function.Name, compactJSON(call.Function.Arguments), res, true)
+				turnToolCalls++
 				if autoValidate && tools.IsMutatingTool(call.Function.Name) && toolCallSucceeded(res) {
 					validateResult := runValidation(workspaceAbs, postEditCmds)
 					s.AddTool("post_validate", "", validateResult)
 					writeToolLog(toolLogger, prompt, "post_validate", strings.Join(postEditCmds, " && "), validateResult, true)
+					turnToolCalls++
 				}
 			}
 			continue
