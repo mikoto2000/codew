@@ -150,7 +150,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 					fmt.Printf("\n[tool:%s] running...\n", call.Function.Name)
 					toolResult := executor.Execute(call)
 					s.AddTool(call.Function.Name, call.ID, toolResult)
-					fmt.Printf("[tool:%s] done\n", call.Function.Name)
+					fmt.Printf("[tool:%s] %s\n", call.Function.Name, summarizeToolResult(toolResult))
 				}
 
 				if parsed && strings.TrimSpace(msg.Content) != "" {
@@ -267,6 +267,58 @@ func runCommand(line string, s *session.Session, sessionPath string) (bool, erro
 
 func saveSessionSnapshot(path string, s *session.Session) error {
 	return session.SaveToFile(path, s.Snapshot())
+}
+
+func summarizeToolResult(raw string) string {
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(raw), &obj); err != nil {
+		return "done"
+	}
+	ok := asBool(obj["ok"])
+	tool := asString(obj["tool"])
+	if !ok {
+		errMsg := asString(obj["error"])
+		if errMsg == "" {
+			errMsg = "failed"
+		}
+		return "ok=false error=" + errMsg
+	}
+
+	switch tool {
+	case "shell_exec":
+		return fmt.Sprintf("ok=true exit_error=%q timed_out=%t", asString(obj["exit_error"]), asBool(obj["timed_out"]))
+	case "replace_in_file":
+		return fmt.Sprintf("ok=true replaced=%d path=%s", asInt(obj["replaced"]), asString(obj["path"]))
+	case "write_file":
+		return fmt.Sprintf("ok=true bytes_written=%d path=%s", asInt(obj["bytes_written"]), asString(obj["path"]))
+	case "apply_patch":
+		return fmt.Sprintf("ok=true checked=%t applied=%t", asBool(obj["checked"]), asBool(obj["applied"]))
+	case "list_files":
+		return fmt.Sprintf("ok=true files=%d", asInt(obj["count"]))
+	default:
+		return "ok=true"
+	}
+}
+
+func asString(v any) string {
+	s, _ := v.(string)
+	return s
+}
+
+func asBool(v any) bool {
+	b, _ := v.(bool)
+	return b
+}
+
+func asInt(v any) int {
+	switch n := v.(type) {
+	case float64:
+		return int(n)
+	case int:
+		return n
+	default:
+		return 0
+	}
 }
 
 func buildSystemPrompt(base string, enableTools bool) string {

@@ -83,6 +83,8 @@ index 1111111..2222222 100644
 
 編集系ツール（`write_file`, `replace_in_file`, `apply_patch`）は、承認プロンプト前に変更内容プレビューを表示します。
 
+実行後は `[tool:<name>] ...` 形式で構造化サマリ（`ok`, `replaced`, `files`, `applied` など）を表示します。
+
 ## Session Persistence
 
 - `--auto-save=true` の場合、各ターン後に `--session-file` へ履歴を保存します。
