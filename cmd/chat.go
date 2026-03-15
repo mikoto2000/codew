@@ -123,6 +123,9 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	fmt.Printf("Tools: %t (auto-approve=%t)\n", toolsEnabled, autoApprove)
 	fmt.Printf("Tool profile: %s\n", profile)
 	fmt.Printf("Sandbox mode: %s\n", sandbox)
+	if autoApprove {
+		fmt.Println("Warning: auto-approve skips mutating tool confirmation prompts.")
+	}
 	fmt.Printf("Network escalation: allow=%t allow-tools=%v\n", networkAllow, networkAllowTool)
 	fmt.Printf("MCP: %t (config=%s, tools=%d)\n", mcpEnabled, mcpConfig, len(mcpManager.Definitions()))
 	fmt.Printf("Context limit: %d chars\n", maxContextChars)

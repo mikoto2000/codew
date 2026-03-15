@@ -327,6 +327,9 @@ func (e *Executor) shellExec(raw json.RawMessage) (map[string]any, error) {
 	if strings.TrimSpace(in.Command) == "" {
 		return nil, errors.New("command is required")
 	}
+	if err := CheckShellCommandAllowed(e.profile, in.Command); err != nil {
+		return nil, err
+	}
 	if in.TimeoutSec <= 0 {
 		in.TimeoutSec = 30
 	}

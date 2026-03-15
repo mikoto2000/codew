@@ -1,6 +1,9 @@
 package tools
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 import "ollama-codex-cli/internal/ollama"
 
@@ -62,4 +65,60 @@ func AllowedToolNamesForProfile(profile string) map[string]struct{} {
 		out[def.Function.Name] = struct{}{}
 	}
 	return out
+}
+
+func CheckShellCommandAllowed(profile, command string) error {
+	profile = NormalizeProfile(profile)
+	fields := strings.Fields(strings.TrimSpace(command))
+	if len(fields) == 0 {
+		return fmt.Errorf("command is required")
+	}
+	for _, allowed := range shellCommandAllowlist(profile) {
+		if hasPrefix(fields, allowed) {
+			return nil
+		}
+	}
+	return fmt.Errorf("shell_exec command is not allowed in profile %q: %s", profile, fields[0])
+}
+
+func shellCommandAllowlist(profile string) [][]string {
+	switch NormalizeProfile(profile) {
+	case ProfileFull:
+		return [][]string{
+			{"pwd"},
+			{"ls"},
+			{"find"},
+			{"cat"},
+			{"sed"},
+			{"grep"},
+			{"rg"},
+			{"git", "status"},
+			{"git", "diff"},
+			{"git", "show"},
+			{"git", "log"},
+			{"go", "test"},
+			{"go", "fmt"},
+			{"go", "vet"},
+			{"npm", "test"},
+			{"npm", "run"},
+			{"pnpm", "test"},
+			{"pnpm", "run"},
+			{"cargo", "test"},
+			{"pytest"},
+		}
+	default:
+		return nil
+	}
+}
+
+func hasPrefix(fields []string, allowed []string) bool {
+	if len(fields) < len(allowed) {
+		return false
+	}
+	for i := range allowed {
+		if fields[i] != allowed[i] {
+			return false
+		}
+	}
+	return true
 }

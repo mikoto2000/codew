@@ -72,7 +72,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&systemText, "system", getEnv("OLLAMA_SYSTEM", "You are a coding assistant."), "System prompt")
 	rootCmd.PersistentFlags().DurationVar(&timeout, "timeout", 120*time.Second, "HTTP request timeout")
 	rootCmd.PersistentFlags().BoolVar(&toolsEnabled, "tools", true, "Enable tool calling")
-	rootCmd.PersistentFlags().BoolVar(&autoApprove, "auto-approve", false, "Auto-approve all tool calls")
+	rootCmd.PersistentFlags().BoolVar(&autoApprove, "auto-approve", false, "Auto-approve all tool calls (unsafe in untrusted workspaces)")
 	rootCmd.PersistentFlags().StringVar(&workspaceRoot, "workspace", ".", "Workspace root for tool access")
 	rootCmd.PersistentFlags().IntVar(&maxToolSteps, "max-tool-steps", 8, "Max tool-calling rounds per user turn")
 	rootCmd.PersistentFlags().StringVar(&sessionFile, "session-file", ".codew/session.json", "Path for session save/load")

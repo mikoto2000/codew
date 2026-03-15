@@ -44,11 +44,11 @@
   - `checkpoint_created`
   - `post_validate_finished`
 
-- [ ] 「安全なデフォルト」をもう一段強くする
-  - mutating tool の preview 必須表示
-  - `shell_exec` allowlist
-  - `--auto-approve` 警告強化
-  - `web_search` の URL 出力方針統一
+- [x] 「安全なデフォルト」をもう一段強くする
+  - [x] mutating tool の preview 必須表示
+  - [x] `shell_exec` allowlist
+  - [x] `--auto-approve` 警告強化
+  - [x] `web_search` の URL 出力方針統一
 
 - [ ] `go.mod` のモジュール名とリポジトリ名の整合を検討する
 

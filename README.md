@@ -187,6 +187,7 @@ index 1111111..2222222 100644
 ```
 
 編集系ツール（`write_file`, `replace_in_file`, `apply_patch`）は、承認プロンプト前に変更内容プレビューを表示します。
+`--auto-approve` を使う場合も、信頼できるワークスペース以外では推奨しません。
 
 実行後は `[tool:<name>] ...` 形式で構造化サマリ（`ok`, `replaced`, `files`, `applied` など）を表示します。
 
@@ -211,6 +212,7 @@ index 1111111..2222222 100644
 
 - `shell_exec` は `pty=true` を指定すると擬似TTYでコマンド実行します。
 - 対話系ツールやTTY前提のコマンドで利用できます。
+- `shell_exec` は安全側のデフォルトとして、`git status`, `git diff`, `go test`, `rg` などの許可コマンドに限定されます。
 
 ## Post-edit Validation
 
@@ -222,6 +224,7 @@ index 1111111..2222222 100644
 - `web_search` は DuckDuckGo Instant Answer API を使って検索結果を返します。
 - 外部ネットワークにアクセスできる環境で利用してください。
 - 各結果には `source_url` と `retrieved_at` を付与し、出典追跡できる形式で返します。
+- モデルが検索結果を使って回答する場合は、最終回答にも URL を含める前提です。
 
 ## Retry Strategy
 
