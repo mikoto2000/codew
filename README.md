@@ -8,6 +8,56 @@ Go で書いた、Codex CLI 風の対話 CLI です。接続先は Ollama API (`
 go build -o codew .
 ```
 
+## Quick Start
+
+最初は次の 3 パターンから選ぶのが安全です。
+
+### 安全寄り
+
+```bash
+./codew chat --tool-profile read-only --sandbox-mode workspace-write
+```
+
+### 標準
+
+```bash
+./codew chat --tool-profile workspace-write --sandbox-mode workspace-write
+```
+
+### 強め
+
+```bash
+./codew chat --tool-profile full --sandbox-mode full --auto-approve
+```
+
+`--auto-approve` は編集系ツールやネットワーク系ツールの確認を減らすため、信頼できる作業ディレクトリでのみ使ってください。
+
+## Common Workflows
+
+コードレビュー:
+
+```bash
+./codew review
+```
+
+リポジトリ読解:
+
+```bash
+./codew chat --tool-profile read-only --sandbox-mode read-only
+```
+
+小修正:
+
+```bash
+./codew chat --tool-profile workspace-write --sandbox-mode workspace-write --auto-checkpoint
+```
+
+調査付き修正:
+
+```bash
+./codew chat --tool-profile full --sandbox-mode workspace-write --network-allow-tool web_search
+```
+
 ## Commands
 
 - `codew` / `codew chat`: interactive chat

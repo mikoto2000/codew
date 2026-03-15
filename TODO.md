@@ -31,7 +31,7 @@
   - malformed json
   - rejected by allowlist
 
-- [ ] README に「最初の 3 パターン」と用途別起動例を追加する
+- [x] README に「最初の 3 パターン」と用途別起動例を追加する
 
 - [ ] `chat` / `run` / `review` の共通実行基盤を作る
 
