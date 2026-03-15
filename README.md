@@ -248,7 +248,8 @@ index 1111111..2222222 100644
 ## Turn Trace Logs
 
 - `--trace-log=true` の場合、ターン単位の実行トレースを JSONL で記録します。
-- 記録項目: mode(chat/run), input, duration_ms, tool_calls, error。
+- 各行は `event`, `turn_id`, `step`, `tool_call_id` を持つ構造化イベントです。
+- 主なイベント: `turn_started`, `model_response_received`, `tool_call_parsed`, `tool_call_denied`, `tool_call_executed`, `checkpoint_created`, `post_validate_finished`, `turn_finished`。
 
 ## Parallel Tool Execution
 

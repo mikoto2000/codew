@@ -35,7 +35,7 @@
 
 - [ ] `chat` / `run` / `review` の共通実行基盤を作る
 
-- [ ] ログを構造化して失敗解析しやすくする
+- [x] ログを構造化して失敗解析しやすくする
   - `turn_started`
   - `model_response_received`
   - `tool_call_parsed`

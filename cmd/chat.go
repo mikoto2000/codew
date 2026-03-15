@@ -191,8 +191,18 @@ func runChat(cmd *cobra.Command, _ []string) error {
 
 		s.AddUser(line)
 		turnStart := time.Now()
+		turnID := strconv.FormatInt(turnStart.UnixNano(), 10)
 		turnToolCalls := 0
 		turnErr := ""
+		if traceLog {
+			_ = turnLogger.Append(logging.TraceEvent{
+				Event:  "turn_started",
+				TurnID: turnID,
+				Mode:   "chat",
+				Input:  line,
+				Model:  s.Model,
+			})
+		}
 		autoCtx := ""
 		if autoContext {
 			ctxText, ctxErr := contextloader.Build(workspaceAbs, line, autoContextFiles, autoContextChars)
@@ -226,6 +236,15 @@ func runChat(cmd *cobra.Command, _ []string) error {
 				}
 				break
 			}
+			if traceLog {
+				_ = turnLogger.Append(logging.TraceEvent{
+					Event:  "model_response_received",
+					TurnID: turnID,
+					Step:   step + 1,
+					Mode:   "chat",
+					Model:  usedModel,
+				})
+			}
 
 			parseResult := agent.ExtractToolCalls(msg, allowed)
 			toolCalls, parsed := parseResult.Calls, parseResult.Parsed
@@ -233,6 +252,18 @@ func runChat(cmd *cobra.Command, _ []string) error {
 				fmt.Fprintf(os.Stderr, "[toolparse] %s\n", agent.FormatDiagnostics(parseResult.Diagnostics))
 			}
 			if toolsEnabled && len(toolCalls) > 0 {
+				if traceLog {
+					for _, call := range toolCalls {
+						_ = turnLogger.Append(logging.TraceEvent{
+							Event:      "tool_call_parsed",
+							TurnID:     turnID,
+							Step:       step + 1,
+							ToolCallID: call.ID,
+							Tool:       call.Function.Name,
+							Mode:       "chat",
+						})
+					}
+				}
 				msg.ToolCalls = toolCalls
 				s.AddAssistantMessage(msg)
 				if canOrchestrateInParallel(toolCalls, profile, sandbox, networkAllow, networkRules) {
@@ -242,6 +273,16 @@ func runChat(cmd *cobra.Command, _ []string) error {
 						s.AddTool(call.Function.Name, call.ID, toolResult)
 						fmt.Printf("\n[tool:%s] %s\n", call.Function.Name, summarizeToolResult(toolResult))
 						writeToolLog(toolLogger, line, call.Function.Name, compactJSON(call.Function.Arguments), toolResult, true)
+						if traceLog {
+							_ = turnLogger.Append(logging.TraceEvent{
+								Event:      "tool_call_executed",
+								TurnID:     turnID,
+								Step:       step + 1,
+								ToolCallID: call.ID,
+								Tool:       call.Function.Name,
+								Mode:       "chat",
+							})
+						}
 						turnToolCalls++
 					}
 					continue
@@ -263,6 +304,17 @@ func runChat(cmd *cobra.Command, _ []string) error {
 						s.AddTool(call.Function.Name, call.ID, toolResult)
 						fmt.Printf("\n[tool:%s] denied\n", call.Function.Name)
 						writeToolLog(toolLogger, line, call.Function.Name, compactJSON(call.Function.Arguments), toolResult, false)
+						if traceLog {
+							_ = turnLogger.Append(logging.TraceEvent{
+								Event:      "tool_call_denied",
+								TurnID:     turnID,
+								Step:       step + 1,
+								ToolCallID: call.ID,
+								Tool:       call.Function.Name,
+								Mode:       "chat",
+								Error:      "tool call denied by policy",
+							})
+						}
 						turnToolCalls++
 						continue
 					}
@@ -280,6 +332,17 @@ func runChat(cmd *cobra.Command, _ []string) error {
 							s.AddTool(call.Function.Name, call.ID, toolResult)
 							fmt.Printf("\n[tool:%s] rejected\n", call.Function.Name)
 							writeToolLog(toolLogger, line, call.Function.Name, compactJSON(call.Function.Arguments), toolResult, false)
+							if traceLog {
+								_ = turnLogger.Append(logging.TraceEvent{
+									Event:      "tool_call_denied",
+									TurnID:     turnID,
+									Step:       step + 1,
+									ToolCallID: call.ID,
+									Tool:       call.Function.Name,
+									Mode:       "chat",
+									Error:      "tool call rejected by user",
+								})
+							}
 							turnToolCalls++
 							continue
 						}
@@ -297,6 +360,17 @@ func runChat(cmd *cobra.Command, _ []string) error {
 							s.AddTool(call.Function.Name, call.ID, toolResult)
 							fmt.Printf("[tool:%s] denied network escalation\n", call.Function.Name)
 							writeToolLog(toolLogger, line, call.Function.Name, compactJSON(call.Function.Arguments), toolResult, false)
+							if traceLog {
+								_ = turnLogger.Append(logging.TraceEvent{
+									Event:      "tool_call_denied",
+									TurnID:     turnID,
+									Step:       step + 1,
+									ToolCallID: call.ID,
+									Tool:       call.Function.Name,
+									Mode:       "chat",
+									Error:      "network escalation denied by user",
+								})
+							}
 							continue
 						}
 						callSandbox = tools.SandboxFull
@@ -308,18 +382,46 @@ func runChat(cmd *cobra.Command, _ []string) error {
 						} else {
 							turnCheckpointed = true
 							fmt.Printf("[checkpoint] created: %s\n", id)
+							if traceLog {
+								_ = turnLogger.Append(logging.TraceEvent{
+									Event:  "checkpoint_created",
+									TurnID: turnID,
+									Step:   step + 1,
+									Tool:   call.Function.Name,
+									Mode:   "chat",
+								})
+							}
 						}
 					}
 					toolResult := executor.ExecuteWithSandbox(call, callSandbox)
 					s.AddTool(call.Function.Name, call.ID, toolResult)
 					fmt.Printf("[tool:%s] %s\n", call.Function.Name, summarizeToolResult(toolResult))
 					writeToolLog(toolLogger, line, call.Function.Name, compactJSON(call.Function.Arguments), toolResult, true)
+					if traceLog {
+						_ = turnLogger.Append(logging.TraceEvent{
+							Event:      "tool_call_executed",
+							TurnID:     turnID,
+							Step:       step + 1,
+							ToolCallID: call.ID,
+							Tool:       call.Function.Name,
+							Mode:       "chat",
+						})
+					}
 					turnToolCalls++
 					if autoValidate && tools.IsMutatingTool(call.Function.Name) && toolCallSucceeded(toolResult) {
 						validateResult := runValidation(workspaceAbs, postEditCmds)
 						s.AddTool("post_validate", "", validateResult)
 						fmt.Printf("[post-validate] %s\n", summarizeToolResult(validateResult))
 						writeToolLog(toolLogger, line, "post_validate", strings.Join(postEditCmds, " && "), validateResult, true)
+						if traceLog {
+							_ = turnLogger.Append(logging.TraceEvent{
+								Event:  "post_validate_finished",
+								TurnID: turnID,
+								Step:   step + 1,
+								Tool:   call.Function.Name,
+								Mode:   "chat",
+							})
+						}
 						turnToolCalls++
 					}
 				}
@@ -347,7 +449,9 @@ func runChat(cmd *cobra.Command, _ []string) error {
 			if !finalPrinted {
 				turnErr = "no_response"
 			}
-			_ = turnLogger.Append(logging.TurnEvent{
+			_ = turnLogger.Append(logging.TraceEvent{
+				Event:      "turn_finished",
+				TurnID:     turnID,
 				Mode:       "chat",
 				Input:      line,
 				DurationMS: time.Since(turnStart).Milliseconds(),

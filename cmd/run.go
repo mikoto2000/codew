@@ -77,6 +77,7 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 	}
 	turnLogger := logging.NewTurnLogger(tracePath)
 	turnStart := time.Now()
+	turnID := fmt.Sprintf("run-%d", turnStart.UnixNano())
 	turnToolCalls := 0
 	defer func() {
 		if traceLog {
@@ -84,7 +85,9 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 			if retErr != nil {
 				errMsg = retErr.Error()
 			}
-			_ = turnLogger.Append(logging.TurnEvent{
+			_ = turnLogger.Append(logging.TraceEvent{
+				Event:      "turn_finished",
+				TurnID:     turnID,
 				Mode:       "run",
 				Input:      prompt,
 				DurationMS: time.Since(turnStart).Milliseconds(),
@@ -93,6 +96,15 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 			})
 		}
 	}()
+	if traceLog {
+		_ = turnLogger.Append(logging.TraceEvent{
+			Event:  "turn_started",
+			TurnID: turnID,
+			Mode:   "run",
+			Input:  prompt,
+			Model:  chatModel,
+		})
+	}
 
 	s := session.New(chatModel, buildSystemPrompt(withProjectHint(systemText, project), toolsEnabled))
 	s.AddUser(prompt)
@@ -134,6 +146,15 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 		if chatErr != nil {
 			return chatErr
 		}
+		if traceLog {
+			_ = turnLogger.Append(logging.TraceEvent{
+				Event:  "model_response_received",
+				TurnID: turnID,
+				Step:   step + 1,
+				Mode:   "run",
+				Model:  s.Model,
+			})
+		}
 
 		parseResult := agent.ExtractToolCalls(msg, allowed)
 		toolCalls := parseResult.Calls
@@ -142,6 +163,18 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 		}
 		if toolsEnabled && len(toolCalls) > 0 {
 			s.AddAssistantMessage(msg)
+			if traceLog {
+				for _, call := range toolCalls {
+					_ = turnLogger.Append(logging.TraceEvent{
+						Event:      "tool_call_parsed",
+						TurnID:     turnID,
+						Step:       step + 1,
+						ToolCallID: call.ID,
+						Tool:       call.Function.Name,
+						Mode:       "run",
+					})
+				}
+			}
 			results := map[int]string{}
 			if canOrchestrateInParallel(toolCalls, profile, sandbox, networkAllow, networkRules) {
 				parallel := runToolCallsOrchestrated(executor, toolCalls, sandbox)
@@ -163,6 +196,17 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 					})
 					if decision == chatloop.DecisionDenied {
 						results[i] = `{"ok":false,"error":"tool call denied by policy"}`
+						if traceLog {
+							_ = turnLogger.Append(logging.TraceEvent{
+								Event:      "tool_call_denied",
+								TurnID:     turnID,
+								Step:       step + 1,
+								ToolCallID: call.ID,
+								Tool:       call.Function.Name,
+								Mode:       "run",
+								Error:      "tool call denied by policy",
+							})
+						}
 						continue
 					}
 					if decision == chatloop.DecisionNeedsNetworkEscalation {
@@ -174,6 +218,15 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 						if id, e := cp.Create(); e == nil {
 							checkpointed = true
 							fmt.Fprintf(os.Stderr, "[checkpoint] created: %s\n", id)
+							if traceLog {
+								_ = turnLogger.Append(logging.TraceEvent{
+									Event:  "checkpoint_created",
+									TurnID: turnID,
+									Step:   step + 1,
+									Tool:   call.Function.Name,
+									Mode:   "run",
+								})
+							}
 						}
 					}
 					results[i] = executor.ExecuteWithSandbox(call, callSandbox)
@@ -184,11 +237,30 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 				res := results[i]
 				s.AddTool(call.Function.Name, call.ID, res)
 				writeToolLog(toolLogger, prompt, call.Function.Name, compactJSON(call.Function.Arguments), res, true)
+				if traceLog {
+					_ = turnLogger.Append(logging.TraceEvent{
+						Event:      "tool_call_executed",
+						TurnID:     turnID,
+						Step:       step + 1,
+						ToolCallID: call.ID,
+						Tool:       call.Function.Name,
+						Mode:       "run",
+					})
+				}
 				turnToolCalls++
 				if autoValidate && tools.IsMutatingTool(call.Function.Name) && toolCallSucceeded(res) {
 					validateResult := runValidation(workspaceAbs, postEditCmds)
 					s.AddTool("post_validate", "", validateResult)
 					writeToolLog(toolLogger, prompt, "post_validate", strings.Join(postEditCmds, " && "), validateResult, true)
+					if traceLog {
+						_ = turnLogger.Append(logging.TraceEvent{
+							Event:  "post_validate_finished",
+							TurnID: turnID,
+							Step:   step + 1,
+							Tool:   call.Function.Name,
+							Mode:   "run",
+						})
+					}
 					turnToolCalls++
 				}
 			}
