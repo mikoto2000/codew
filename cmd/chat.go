@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"ollama-codex-cli/internal/agent"
+	"ollama-codex-cli/internal/chatloop"
 	"ollama-codex-cli/internal/checkpoint"
 	"ollama-codex-cli/internal/contextloader"
 	"ollama-codex-cli/internal/logging"
@@ -234,7 +235,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 			if toolsEnabled && len(toolCalls) > 0 {
 				msg.ToolCalls = toolCalls
 				s.AddAssistantMessage(msg)
-				if canOrchestrateInParallel(toolCalls, sandbox, networkAllow, networkRules) {
+				if canOrchestrateInParallel(toolCalls, profile, sandbox, networkAllow, networkRules) {
 					results := runToolCallsOrchestrated(executor, toolCalls, sandbox)
 					for i, call := range toolCalls {
 						toolResult := results[i]
@@ -247,7 +248,25 @@ func runChat(cmd *cobra.Command, _ []string) error {
 				}
 
 				for _, call := range toolCalls {
-					if !approveAll {
+					decision := chatloop.Decide(chatloop.ApprovalRequest{
+						ToolName:     call.Function.Name,
+						IsMCP:        mcpManager != nil && mcpManager.HasTool(call.Function.Name),
+						IsMutating:   tools.IsMutatingTool(call.Function.Name),
+						Sandbox:      sandbox,
+						AutoApprove:  approveAll,
+						NetworkAllow: networkAllow,
+						NetworkRules: networkRules,
+						Profile:      profile,
+					})
+					if decision == chatloop.DecisionDenied {
+						toolResult := `{"ok":false,"error":"tool call denied by policy"}`
+						s.AddTool(call.Function.Name, call.ID, toolResult)
+						fmt.Printf("\n[tool:%s] denied\n", call.Function.Name)
+						writeToolLog(toolLogger, line, call.Function.Name, compactJSON(call.Function.Arguments), toolResult, false)
+						turnToolCalls++
+						continue
+					}
+					if decision == chatloop.DecisionNeedsUserApproval {
 						preview := ""
 						if tools.IsMutatingTool(call.Function.Name) {
 							preview = tools.Preview(call)
@@ -268,7 +287,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 
 					fmt.Printf("\n[tool:%s] running...\n", call.Function.Name)
 					callSandbox := sandbox
-					if needsNetworkEscalation(call, mcpManager, sandbox, networkAllow, networkRules) {
+					if decision == chatloop.DecisionNeedsNetworkEscalation {
 						allowOnce, allowAlways := askNetworkEscalation(lineEditor, call.Function.Name)
 						if allowAlways {
 							networkRules[call.Function.Name] = true
@@ -709,7 +728,7 @@ func withAutoContext(messages []ollama.Message, autoCtx string) []ollama.Message
 	return out
 }
 
-func canOrchestrateInParallel(calls []ollama.ToolCall, sandbox string, networkAllow bool, networkRules map[string]bool) bool {
+func canOrchestrateInParallel(calls []ollama.ToolCall, profile string, sandbox string, networkAllow bool, networkRules map[string]bool) bool {
 	if len(calls) < 2 {
 		return false
 	}
@@ -717,7 +736,13 @@ func canOrchestrateInParallel(calls []ollama.ToolCall, sandbox string, networkAl
 		if !isParallelSafeTool(c.Function.Name) {
 			return false
 		}
-		if needsNetworkEscalation(c, nil, sandbox, networkAllow, networkRules) {
+		if chatloop.NeedsNetworkEscalation(chatloop.ApprovalRequest{
+			ToolName:     c.Function.Name,
+			Sandbox:      sandbox,
+			NetworkAllow: networkAllow,
+			NetworkRules: networkRules,
+			Profile:      profile,
+		}) {
 			return false
 		}
 	}
@@ -817,17 +842,6 @@ func callDependencies(call ollama.ToolCall) []string {
 		}
 	}
 	return out
-}
-
-func needsNetworkEscalation(call ollama.ToolCall, mcpManager *mcp.Manager, sandbox string, allowAll bool, allowRules map[string]bool) bool {
-	if allowAll || tools.AllowsNetwork(sandbox) {
-		return false
-	}
-	if allowRules[call.Function.Name] {
-		return false
-	}
-	isMCP := mcpManager != nil && mcpManager.HasTool(call.Function.Name)
-	return tools.RequiresNetwork(call.Function.Name, isMCP)
 }
 
 func askNetworkEscalation(lineEditor *liner.State, toolName string) (allowOnce bool, allowAlways bool) {

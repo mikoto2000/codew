@@ -12,7 +12,7 @@
   - `internal/chatloop/recovery.go`
   - `internal/chatloop/render.go`
 
-- [ ] 承認ロジックを 1 箇所に寄せる
+- [x] 承認ロジックを 1 箇所に寄せる
   - `DecisionEngine` 相当を導入し、`allowed` / `denied` / `needs-user-approval` / `needs-network-escalation` を統一判定する
 
 - [ ] 会話ターン単位の統合テストを追加する

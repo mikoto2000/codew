@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"ollama-codex-cli/internal/agent"
+	"ollama-codex-cli/internal/chatloop"
 	"ollama-codex-cli/internal/checkpoint"
 	"ollama-codex-cli/internal/contextloader"
 	"ollama-codex-cli/internal/logging"
@@ -142,7 +143,7 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 		if toolsEnabled && len(toolCalls) > 0 {
 			s.AddAssistantMessage(msg)
 			results := map[int]string{}
-			if canOrchestrateInParallel(toolCalls, sandbox, networkAllow, networkRules) {
+			if canOrchestrateInParallel(toolCalls, profile, sandbox, networkAllow, networkRules) {
 				parallel := runToolCallsOrchestrated(executor, toolCalls, sandbox)
 				for i, result := range parallel {
 					results[i] = result
@@ -150,7 +151,21 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 			} else {
 				for i, call := range toolCalls {
 					callSandbox := sandbox
-					if needsNetworkEscalation(call, mcpManager, sandbox, networkAllow, networkRules) {
+					decision := chatloop.Decide(chatloop.ApprovalRequest{
+						ToolName:     call.Function.Name,
+						IsMCP:        mcpManager != nil && mcpManager.HasTool(call.Function.Name),
+						IsMutating:   tools.IsMutatingTool(call.Function.Name),
+						Sandbox:      sandbox,
+						AutoApprove:  autoApprove,
+						NetworkAllow: networkAllow,
+						NetworkRules: networkRules,
+						Profile:      profile,
+					})
+					if decision == chatloop.DecisionDenied {
+						results[i] = `{"ok":false,"error":"tool call denied by policy"}`
+						continue
+					}
+					if decision == chatloop.DecisionNeedsNetworkEscalation {
 						if networkAllow || networkRules[call.Function.Name] {
 							callSandbox = tools.SandboxFull
 						}
