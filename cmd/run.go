@@ -134,7 +134,11 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 			return chatErr
 		}
 
-		toolCalls, _ := agent.ExtractToolCalls(msg, allowed)
+		parseResult := agent.ExtractToolCalls(msg, allowed)
+		toolCalls := parseResult.Calls
+		if parseResult.Parsed && len(toolCalls) == 0 && len(parseResult.Diagnostics) > 0 {
+			fmt.Fprintf(os.Stderr, "[toolparse] %s\n", agent.FormatDiagnostics(parseResult.Diagnostics))
+		}
 		if toolsEnabled && len(toolCalls) > 0 {
 			s.AddAssistantMessage(msg)
 			results := map[int]string{}

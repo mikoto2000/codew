@@ -226,7 +226,11 @@ func runChat(cmd *cobra.Command, _ []string) error {
 				break
 			}
 
-			toolCalls, parsed := agent.ExtractToolCalls(msg, allowed)
+			parseResult := agent.ExtractToolCalls(msg, allowed)
+			toolCalls, parsed := parseResult.Calls, parseResult.Parsed
+			if parsed && len(toolCalls) == 0 && len(parseResult.Diagnostics) > 0 {
+				fmt.Fprintf(os.Stderr, "[toolparse] %s\n", agent.FormatDiagnostics(parseResult.Diagnostics))
+			}
 			if toolsEnabled && len(toolCalls) > 0 {
 				msg.ToolCalls = toolCalls
 				s.AddAssistantMessage(msg)

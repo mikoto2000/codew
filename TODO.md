@@ -25,7 +25,7 @@
 - [ ] `internal/tools/executor.go` を責務ごとに分割する
   - definitions / policy_eval / builtin_file / builtin_shell / builtin_web / mcp_bridge
 
-- [ ] `toolparse` に診断情報を返す
+- [x] `toolparse` に診断情報を返す
   - unknown tool
   - invalid arguments
   - malformed json
