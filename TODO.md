@@ -7,10 +7,12 @@
 `codew-review-pr-plan.md` をもとにした着手リスト。優先順。
 
 - [ ] `cmd/chat.go` を分割し、会話制御を薄くする
-  - `internal/chatloop/runner.go`
-  - `internal/chatloop/approval.go`
-  - `internal/chatloop/recovery.go`
-  - `internal/chatloop/render.go`
+  - [ ] `internal/chatloop/runner.go`
+  - [x] `internal/chatloop/approval.go`
+  - [ ] `internal/chatloop/recovery.go`
+  - [x] `internal/chatloop/render.go`
+  - [x] `internal/chatloop/orchestrate.go`
+  - [x] `internal/chatloop/history.go`
 
 - [x] 承認ロジックを 1 箇所に寄せる
   - `DecisionEngine` 相当を導入し、`allowed` / `denied` / `needs-user-approval` / `needs-network-escalation` を統一判定する

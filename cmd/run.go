@@ -137,7 +137,7 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 		}
 	}
 	for step := 0; step < maxToolSteps; step++ {
-		messages := withAutoContext(s.MessagesForModel(maxContextChars), autoCtx)
+		messages := chatloop.WithAutoContext(s.MessagesForModel(maxContextChars), autoCtx)
 		ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
 		finishWorking := announceWorking("assistant is working")
 		msg, _, chatErr := chatWithRetry(ctx, client, s.Model, messages, toolDefs)
@@ -176,8 +176,8 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 				}
 			}
 			results := map[int]string{}
-			if canOrchestrateInParallel(toolCalls, profile, sandbox, networkAllow, networkRules) {
-				parallel := runToolCallsOrchestrated(executor, toolCalls, sandbox)
+			if chatloop.CanOrchestrateInParallel(toolCalls, profile, sandbox, networkAllow, networkRules) {
+				parallel := chatloop.RunToolCallsOrchestrated(executor, toolCalls, sandbox)
 				for i, result := range parallel {
 					results[i] = result
 				}
@@ -236,7 +236,7 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 			for i, call := range toolCalls {
 				res := results[i]
 				s.AddTool(call.Function.Name, call.ID, res)
-				writeToolLog(toolLogger, prompt, call.Function.Name, compactJSON(call.Function.Arguments), res, true)
+				writeToolLog(toolLogger, prompt, call.Function.Name, chatloop.CompactJSON(call.Function.Arguments), res, true)
 				if traceLog {
 					_ = turnLogger.Append(logging.TraceEvent{
 						Event:      "tool_call_executed",

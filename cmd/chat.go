@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,7 +11,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/peterh/liner"
@@ -141,11 +139,11 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	lineEditor := liner.NewLiner()
 	defer lineEditor.Close()
 	lineEditor.SetCtrlCAborts(true)
-	if err := loadLineHistory(lineEditor, historyPath); err != nil {
+	if err := chatloop.LoadLineHistory(lineEditor, historyPath); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to load history: %v\n", err)
 	}
 	defer func() {
-		if err := saveLineHistory(lineEditor, historyPath); err != nil {
+		if err := chatloop.SaveLineHistory(lineEditor, historyPath); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to save history: %v\n", err)
 		}
 	}()
@@ -182,7 +180,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 			if cmdErr != nil {
 				fmt.Fprintf(os.Stderr, "command error: %v\n", cmdErr)
 			} else if autoSave {
-				if saveErr := saveSessionSnapshot(sessionPath, s); saveErr != nil {
+				if saveErr := chatloop.SaveSessionSnapshot(sessionPath, s); saveErr != nil {
 					fmt.Fprintf(os.Stderr, "warning: auto-save failed: %v\n", saveErr)
 				}
 			}
@@ -221,7 +219,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 		finalPrinted := false
 		turnCheckpointed := false
 		for step := 0; step < maxToolSteps; step++ {
-			messages := withAutoContext(s.MessagesForModel(maxContextChars), autoCtx)
+			messages := chatloop.WithAutoContext(s.MessagesForModel(maxContextChars), autoCtx)
 			ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
 			finishWorking := announceWorking("assistant is working")
 			msg, usedModel, chatErr := chatWithRetry(ctx, client, s.Model, messages, toolDefs)
@@ -269,13 +267,13 @@ func runChat(cmd *cobra.Command, _ []string) error {
 				}
 				msg.ToolCalls = toolCalls
 				s.AddAssistantMessage(msg)
-				if canOrchestrateInParallel(toolCalls, profile, sandbox, networkAllow, networkRules) {
-					results := runToolCallsOrchestrated(executor, toolCalls, sandbox)
+				if chatloop.CanOrchestrateInParallel(toolCalls, profile, sandbox, networkAllow, networkRules) {
+					results := chatloop.RunToolCallsOrchestrated(executor, toolCalls, sandbox)
 					for i, call := range toolCalls {
 						toolResult := results[i]
 						s.AddTool(call.Function.Name, call.ID, toolResult)
-						fmt.Printf("\n[tool:%s] %s\n", call.Function.Name, summarizeToolResult(toolResult))
-						writeToolLog(toolLogger, line, call.Function.Name, compactJSON(call.Function.Arguments), toolResult, true)
+						fmt.Printf("\n[tool:%s] %s\n", call.Function.Name, chatloop.SummarizeToolResult(toolResult))
+						writeToolLog(toolLogger, line, call.Function.Name, chatloop.CompactJSON(call.Function.Arguments), toolResult, true)
 						if traceLog {
 							_ = turnLogger.Append(logging.TraceEvent{
 								Event:      "tool_call_executed",
@@ -306,7 +304,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 						toolResult := `{"ok":false,"error":"tool call denied by policy"}`
 						s.AddTool(call.Function.Name, call.ID, toolResult)
 						fmt.Printf("\n[tool:%s] denied\n", call.Function.Name)
-						writeToolLog(toolLogger, line, call.Function.Name, compactJSON(call.Function.Arguments), toolResult, false)
+						writeToolLog(toolLogger, line, call.Function.Name, chatloop.CompactJSON(call.Function.Arguments), toolResult, false)
 						if traceLog {
 							_ = turnLogger.Append(logging.TraceEvent{
 								Event:      "tool_call_denied",
@@ -326,7 +324,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 						if tools.IsMutatingTool(call.Function.Name) {
 							preview = tools.Preview(call)
 						}
-						approved, allowAll := askToolApproval(lineEditor, call, preview)
+						approved, allowAll := chatloop.AskToolApproval(lineEditor, call, preview)
 						if allowAll {
 							approveAll = true
 						}
@@ -334,7 +332,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 							toolResult := `{"ok":false,"error":"tool call rejected by user"}`
 							s.AddTool(call.Function.Name, call.ID, toolResult)
 							fmt.Printf("\n[tool:%s] rejected\n", call.Function.Name)
-							writeToolLog(toolLogger, line, call.Function.Name, compactJSON(call.Function.Arguments), toolResult, false)
+							writeToolLog(toolLogger, line, call.Function.Name, chatloop.CompactJSON(call.Function.Arguments), toolResult, false)
 							if traceLog {
 								_ = turnLogger.Append(logging.TraceEvent{
 									Event:      "tool_call_denied",
@@ -354,7 +352,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 					fmt.Printf("\n[tool:%s] running...\n", call.Function.Name)
 					callSandbox := sandbox
 					if decision == chatloop.DecisionNeedsNetworkEscalation {
-						allowOnce, allowAlways := askNetworkEscalation(lineEditor, call.Function.Name)
+						allowOnce, allowAlways := chatloop.AskNetworkEscalation(lineEditor, call.Function.Name)
 						if allowAlways {
 							networkRules[call.Function.Name] = true
 						}
@@ -362,7 +360,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 							toolResult := `{"ok":false,"error":"network escalation denied by user"}`
 							s.AddTool(call.Function.Name, call.ID, toolResult)
 							fmt.Printf("[tool:%s] denied network escalation\n", call.Function.Name)
-							writeToolLog(toolLogger, line, call.Function.Name, compactJSON(call.Function.Arguments), toolResult, false)
+							writeToolLog(toolLogger, line, call.Function.Name, chatloop.CompactJSON(call.Function.Arguments), toolResult, false)
 							if traceLog {
 								_ = turnLogger.Append(logging.TraceEvent{
 									Event:      "tool_call_denied",
@@ -398,8 +396,8 @@ func runChat(cmd *cobra.Command, _ []string) error {
 					}
 					toolResult := executor.ExecuteWithSandbox(call, callSandbox)
 					s.AddTool(call.Function.Name, call.ID, toolResult)
-					fmt.Printf("[tool:%s] %s\n", call.Function.Name, summarizeToolResult(toolResult))
-					writeToolLog(toolLogger, line, call.Function.Name, compactJSON(call.Function.Arguments), toolResult, true)
+					fmt.Printf("[tool:%s] %s\n", call.Function.Name, chatloop.SummarizeToolResult(toolResult))
+					writeToolLog(toolLogger, line, call.Function.Name, chatloop.CompactJSON(call.Function.Arguments), toolResult, true)
 					if traceLog {
 						_ = turnLogger.Append(logging.TraceEvent{
 							Event:      "tool_call_executed",
@@ -414,7 +412,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 					if autoValidate && tools.IsMutatingTool(call.Function.Name) && toolCallSucceeded(toolResult) {
 						validateResult := runValidation(workspaceAbs, postEditCmds)
 						s.AddTool("post_validate", "", validateResult)
-						fmt.Printf("[post-validate] %s\n", summarizeToolResult(validateResult))
+						fmt.Printf("[post-validate] %s\n", chatloop.SummarizeToolResult(validateResult))
 						writeToolLog(toolLogger, line, "post_validate", strings.Join(postEditCmds, " && "), validateResult, true)
 						if traceLog {
 							_ = turnLogger.Append(logging.TraceEvent{
@@ -463,67 +461,11 @@ func runChat(cmd *cobra.Command, _ []string) error {
 			})
 		}
 		if autoSave {
-			if saveErr := saveSessionSnapshot(sessionPath, s); saveErr != nil {
+			if saveErr := chatloop.SaveSessionSnapshot(sessionPath, s); saveErr != nil {
 				fmt.Fprintf(os.Stderr, "warning: auto-save failed: %v\n", saveErr)
 			}
 		}
 	}
-}
-
-func askToolApproval(lineEditor *liner.State, call ollama.ToolCall, preview string) (approved bool, allowAll bool) {
-	args := compactJSON(call.Function.Arguments)
-	if preview != "" {
-		fmt.Printf("\n[tool:%s preview]\n%s\n", call.Function.Name, colorizeDiff(preview))
-	}
-	line, err := lineEditor.Prompt(fmt.Sprintf("approve tool %s args=%s ? [y/N/a]: ", call.Function.Name, args))
-	if err != nil {
-		return false, false
-	}
-	switch strings.ToLower(strings.TrimSpace(line)) {
-	case "y", "yes":
-		return true, false
-	case "a", "all":
-		return true, true
-	default:
-		return false, false
-	}
-}
-
-func loadLineHistory(lineEditor *liner.State, path string) error {
-	file, err := os.Open(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return err
-	}
-	defer file.Close()
-	_, err = lineEditor.ReadHistory(file)
-	return err
-}
-
-func saveLineHistory(lineEditor *liner.State, path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	_, err = lineEditor.WriteHistory(file)
-	return err
-}
-
-func compactJSON(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return "{}"
-	}
-	var out bytes.Buffer
-	if err := json.Compact(&out, raw); err != nil {
-		return string(raw)
-	}
-	return out.String()
 }
 
 func runCommand(ctx context.Context, line string, s *session.Session, sessionPath string, checkpoints *checkpoint.Manager, planner *plan.State, client *ollama.Client) (bool, error) {
@@ -592,7 +534,7 @@ func runCommand(ctx context.Context, line string, s *session.Session, sessionPat
 		fmt.Println("/plan-done N   : mark item N completed")
 		return false, nil
 	case "/save":
-		if err := saveSessionSnapshot(sessionPath, s); err != nil {
+		if err := chatloop.SaveSessionSnapshot(sessionPath, s); err != nil {
 			return false, err
 		}
 		fmt.Printf("session saved: %s\n", sessionPath)
@@ -630,13 +572,13 @@ func runCommand(ctx context.Context, line string, s *session.Session, sessionPat
 		fmt.Print(planner.Render())
 		return false, nil
 	case "/plan-doing":
-		idx, err := parsePositiveInt(arg)
+		idx, err := chatloop.ParsePositiveInt(arg)
 		if err != nil {
 			return false, err
 		}
 		return false, planner.Set(idx, plan.InProgress)
 	case "/plan-done":
-		idx, err := parsePositiveInt(arg)
+		idx, err := chatloop.ParsePositiveInt(arg)
 		if err != nil {
 			return false, err
 		}
@@ -646,91 +588,13 @@ func runCommand(ctx context.Context, line string, s *session.Session, sessionPat
 	}
 }
 
-func saveSessionSnapshot(path string, s *session.Session) error {
-	return session.SaveToFile(path, s.Snapshot())
-}
-
-func parsePositiveInt(raw string) (int, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return 0, errors.New("index is required")
-	}
-	n, err := strconv.Atoi(raw)
-	if err != nil || n <= 0 {
-		return 0, errors.New("index must be positive integer")
-	}
-	return n, nil
-}
-
-func summarizeToolResult(raw string) string {
-	var obj map[string]any
-	if err := json.Unmarshal([]byte(raw), &obj); err != nil {
-		return "done"
-	}
-	ok := asBool(obj["ok"])
-	tool := asString(obj["tool"])
-	if !ok {
-		errMsg := asString(obj["error"])
-		if errMsg == "" {
-			errMsg = "failed"
-		}
-		return "ok=false error=" + errMsg
-	}
-
-	switch tool {
-	case "shell_exec":
-		return fmt.Sprintf("ok=true exit_error=%q timed_out=%t", asString(obj["exit_error"]), asBool(obj["timed_out"]))
-	case "replace_in_file":
-		return fmt.Sprintf("ok=true replaced=%d path=%s", asInt(obj["replaced"]), asString(obj["path"]))
-	case "write_file":
-		return fmt.Sprintf("ok=true bytes_written=%d path=%s", asInt(obj["bytes_written"]), asString(obj["path"]))
-	case "apply_patch":
-		return fmt.Sprintf("ok=true checked=%t applied=%t", asBool(obj["checked"]), asBool(obj["applied"]))
-	case "list_files":
-		return fmt.Sprintf("ok=true files=%d", asInt(obj["count"]))
-	case "post_validate":
-		return fmt.Sprintf("ok=%t commands=%d", ok, lenAny(obj["commands"]))
-	default:
-		return "ok=true"
-	}
-}
-
-func asString(v any) string {
-	s, _ := v.(string)
-	return s
-}
-
-func asBool(v any) bool {
-	b, _ := v.(bool)
-	return b
-}
-
-func asInt(v any) int {
-	switch n := v.(type) {
-	case float64:
-		return int(n)
-	case int:
-		return n
-	default:
-		return 0
-	}
-}
-
-func lenAny(v any) int {
-	switch arr := v.(type) {
-	case []any:
-		return len(arr)
-	default:
-		return 0
-	}
-}
-
 func toolCallSucceeded(raw string) bool {
 	var obj map[string]any
 	if err := json.Unmarshal([]byte(raw), &obj); err != nil {
 		return false
 	}
-	return asBool(obj["ok"])
+	ok, _ := obj["ok"].(bool)
+	return ok
 }
 
 func runValidation(workspace string, commands []string) string {
@@ -814,179 +678,6 @@ func chatWithRetry(ctx context.Context, client *ollama.Client, primaryModel stri
 		}
 	}
 	return ollama.Message{}, primaryModel, lastErr
-}
-
-func withAutoContext(messages []ollama.Message, autoCtx string) []ollama.Message {
-	if strings.TrimSpace(autoCtx) == "" || len(messages) == 0 {
-		return messages
-	}
-	last := messages[len(messages)-1]
-	if last.Role != "user" {
-		out := make([]ollama.Message, 0, len(messages)+1)
-		out = append(out, messages...)
-		out = append(out, ollama.Message{Role: "system", Content: autoCtx})
-		return out
-	}
-
-	out := make([]ollama.Message, 0, len(messages)+1)
-	out = append(out, messages[:len(messages)-1]...)
-	out = append(out, ollama.Message{Role: "system", Content: autoCtx})
-	out = append(out, last)
-	return out
-}
-
-func canOrchestrateInParallel(calls []ollama.ToolCall, profile string, sandbox string, networkAllow bool, networkRules map[string]bool) bool {
-	if len(calls) < 2 {
-		return false
-	}
-	for _, c := range calls {
-		if !isParallelSafeTool(c.Function.Name) {
-			return false
-		}
-		if chatloop.NeedsNetworkEscalation(chatloop.ApprovalRequest{
-			ToolName:     c.Function.Name,
-			Sandbox:      sandbox,
-			NetworkAllow: networkAllow,
-			NetworkRules: networkRules,
-			Profile:      profile,
-		}) {
-			return false
-		}
-	}
-	return true
-}
-
-func isParallelSafeTool(name string) bool {
-	switch name {
-	case "read_file", "list_files", "web_search":
-		return true
-	default:
-		return false
-	}
-}
-
-func runToolCallsOrchestrated(executor *tools.Executor, calls []ollama.ToolCall, sandbox string) []string {
-	results := make([]string, len(calls))
-	done := make([]bool, len(calls))
-	remaining := len(calls)
-
-	for remaining > 0 {
-		ready := []int{}
-		for i, call := range calls {
-			if done[i] {
-				continue
-			}
-			if depsSatisfied(call, calls, done) {
-				ready = append(ready, i)
-			}
-		}
-		if len(ready) == 0 {
-			for i := range calls {
-				if !done[i] {
-					results[i] = `{"ok":false,"error":"orchestration deadlock: unresolved dependencies"}`
-					done[i] = true
-					remaining--
-				}
-			}
-			break
-		}
-
-		var wg sync.WaitGroup
-		wg.Add(len(ready))
-		for _, idx := range ready {
-			idx := idx
-			go func() {
-				defer wg.Done()
-				results[idx] = executor.ExecuteWithSandbox(calls[idx], sandbox)
-			}()
-		}
-		wg.Wait()
-		for _, idx := range ready {
-			done[idx] = true
-			remaining--
-		}
-	}
-	return results
-}
-
-func depsSatisfied(call ollama.ToolCall, all []ollama.ToolCall, done []bool) bool {
-	deps := callDependencies(call)
-	if len(deps) == 0 {
-		return true
-	}
-	for _, dep := range deps {
-		found := false
-		for i, c := range all {
-			if done[i] && c.Function.Name == dep {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
-	}
-	return true
-}
-
-func callDependencies(call ollama.ToolCall) []string {
-	var obj map[string]any
-	if err := json.Unmarshal(call.Function.Arguments, &obj); err != nil {
-		return nil
-	}
-	raw, ok := obj["_depends_on"]
-	if !ok {
-		return nil
-	}
-	items, ok := raw.([]any)
-	if !ok {
-		return nil
-	}
-	out := []string{}
-	for _, item := range items {
-		if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
-			out = append(out, strings.TrimSpace(s))
-		}
-	}
-	return out
-}
-
-func askNetworkEscalation(lineEditor *liner.State, toolName string) (allowOnce bool, allowAlways bool) {
-	line, err := lineEditor.Prompt(fmt.Sprintf("network escalation required for %s. allow once [y], always [a], deny [N]: ", toolName))
-	if err != nil {
-		return false, false
-	}
-	switch strings.ToLower(strings.TrimSpace(line)) {
-	case "y", "yes":
-		return true, false
-	case "a", "all", "always":
-		return false, true
-	default:
-		return false, false
-	}
-}
-
-func colorizeDiff(text string) string {
-	lines := strings.Split(text, "\n")
-	var out strings.Builder
-	for i, line := range lines {
-		colored := line
-		switch {
-		case strings.HasPrefix(line, "+++"), strings.HasPrefix(line, "---"):
-			colored = "\x1b[36m" + line + "\x1b[0m"
-		case strings.HasPrefix(line, "@@"):
-			colored = "\x1b[33m" + line + "\x1b[0m"
-		case strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++"):
-			colored = "\x1b[32m" + line + "\x1b[0m"
-		case strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---"):
-			colored = "\x1b[31m" + line + "\x1b[0m"
-		}
-		out.WriteString(colored)
-		if i != len(lines)-1 {
-			out.WriteString("\n")
-		}
-	}
-	return out.String()
 }
 
 func buildSystemPrompt(base string, enableTools bool) string {
