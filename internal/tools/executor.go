@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -49,44 +48,12 @@ func (e *Executor) ExecuteWithSandbox(call ollama.ToolCall, sandboxMode string) 
 }
 
 func (e *Executor) executeWithSandbox(call ollama.ToolCall, sandboxMode string) string {
-	result := map[string]any{"tool": call.Function.Name}
+	result, ok := e.preflight(call, sandboxMode)
+	if !ok {
+		return marshalResult(result)
+	}
 	if e.mcp != nil && e.mcp.HasTool(call.Function.Name) {
-		if err := CheckPermissions(sandboxMode, RequiredPermissions(call.Function.Name, true)); err != nil {
-			result["ok"] = false
-			result["error"] = err.Error()
-			data, _ := json.Marshal(result)
-			return string(data)
-		}
-		if e.profile != ProfileFull {
-			result["ok"] = false
-			result["error"] = fmt.Sprintf("mcp tool %q is allowed only in profile %q", call.Function.Name, ProfileFull)
-			data, _ := json.Marshal(result)
-			return string(data)
-		}
-		payload, err := e.mcp.Call(context.Background(), call.Function.Name, call.Function.Arguments)
-		if err != nil {
-			result["ok"] = false
-			result["error"] = err.Error()
-		} else {
-			result["ok"] = true
-			for k, v := range payload {
-				result[k] = v
-			}
-		}
-		data, _ := json.Marshal(result)
-		return string(data)
-	}
-	if err := CheckPermissions(sandboxMode, RequiredPermissions(call.Function.Name, false)); err != nil {
-		result["ok"] = false
-		result["error"] = err.Error()
-		data, _ := json.Marshal(result)
-		return string(data)
-	}
-	if !IsToolAllowed(e.profile, call.Function.Name) {
-		result["ok"] = false
-		result["error"] = fmt.Sprintf("tool %q is not allowed in profile %q", call.Function.Name, e.profile)
-		data, _ := json.Marshal(result)
-		return string(data)
+		return e.executeMCP(call, result)
 	}
 	if e.dryRun && IsMutatingTool(call.Function.Name) {
 		plan, err := e.dryRunPlan(call)
@@ -100,8 +67,7 @@ func (e *Executor) executeWithSandbox(call ollama.ToolCall, sandboxMode string) 
 				result[k] = v
 			}
 		}
-		data, _ := json.Marshal(result)
-		return string(data)
+		return marshalResult(result)
 	}
 
 	var (
@@ -137,8 +103,7 @@ func (e *Executor) executeWithSandbox(call ollama.ToolCall, sandboxMode string) 
 		}
 	}
 
-	data, _ := json.Marshal(result)
-	return string(data)
+	return marshalResult(result)
 }
 
 func (e *Executor) dryRunPlan(call ollama.ToolCall) (map[string]any, error) {

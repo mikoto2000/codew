@@ -26,11 +26,11 @@
 
 - [ ] `internal/tools/executor.go` を責務ごとに分割する
   - [x] definitions
-  - [ ] policy_eval
+  - [x] policy_eval
   - [x] builtin_file
   - [x] builtin_shell
   - [x] builtin_web
-  - [ ] mcp_bridge
+  - [x] mcp_bridge
 
 - [x] `toolparse` に診断情報を返す
   - unknown tool
