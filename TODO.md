@@ -25,7 +25,12 @@
   - [x] JSON tool call 非表示
 
 - [ ] `internal/tools/executor.go` を責務ごとに分割する
-  - definitions / policy_eval / builtin_file / builtin_shell / builtin_web / mcp_bridge
+  - [x] definitions
+  - [ ] policy_eval
+  - [x] builtin_file
+  - [x] builtin_shell
+  - [x] builtin_web
+  - [ ] mcp_bridge
 
 - [x] `toolparse` に診断情報を返す
   - unknown tool
