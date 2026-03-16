@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"ollama-codex-cli/internal/app"
+	"github.com/mikoto2000/codew/internal/app"
 )
 
 var reviewCmd = &cobra.Command{

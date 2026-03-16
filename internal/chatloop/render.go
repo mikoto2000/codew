@@ -8,7 +8,7 @@ import (
 
 	"github.com/peterh/liner"
 
-	"ollama-codex-cli/internal/ollama"
+	"github.com/mikoto2000/codew/internal/ollama"
 )
 
 func AskToolApproval(lineEditor *liner.State, call ollama.ToolCall, preview string) (approved bool, allowAll bool) {

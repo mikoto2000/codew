@@ -1,6 +1,6 @@
 package chatloop
 
-import "ollama-codex-cli/internal/tools"
+import "github.com/mikoto2000/codew/internal/tools"
 
 type Decision string
 

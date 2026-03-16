@@ -9,7 +9,7 @@ import (
 
 	"github.com/peterh/liner"
 
-	"ollama-codex-cli/internal/session"
+	"github.com/mikoto2000/codew/internal/session"
 )
 
 func LoadLineHistory(lineEditor *liner.State, path string) error {

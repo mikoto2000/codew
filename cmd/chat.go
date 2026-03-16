@@ -16,16 +16,16 @@ import (
 	"github.com/peterh/liner"
 	"github.com/spf13/cobra"
 
-	"ollama-codex-cli/internal/agent"
-	"ollama-codex-cli/internal/app"
-	"ollama-codex-cli/internal/chatloop"
-	"ollama-codex-cli/internal/checkpoint"
-	"ollama-codex-cli/internal/contextloader"
-	"ollama-codex-cli/internal/logging"
-	"ollama-codex-cli/internal/ollama"
-	"ollama-codex-cli/internal/plan"
-	"ollama-codex-cli/internal/session"
-	"ollama-codex-cli/internal/tools"
+	"github.com/mikoto2000/codew/internal/agent"
+	"github.com/mikoto2000/codew/internal/app"
+	"github.com/mikoto2000/codew/internal/chatloop"
+	"github.com/mikoto2000/codew/internal/checkpoint"
+	"github.com/mikoto2000/codew/internal/contextloader"
+	"github.com/mikoto2000/codew/internal/logging"
+	"github.com/mikoto2000/codew/internal/ollama"
+	"github.com/mikoto2000/codew/internal/plan"
+	"github.com/mikoto2000/codew/internal/session"
+	"github.com/mikoto2000/codew/internal/tools"
 )
 
 const toolPromptSuffix = `

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"ollama-codex-cli/cmd"
+	"github.com/mikoto2000/codew/cmd"
 )
 
 func main() {

@@ -3,7 +3,7 @@ package cmd
 import (
 	"strings"
 
-	"ollama-codex-cli/internal/projectdetect"
+	"github.com/mikoto2000/codew/internal/projectdetect"
 )
 
 func withProjectHint(base string, result projectdetect.Result) string {

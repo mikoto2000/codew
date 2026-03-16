@@ -7,7 +7,7 @@ VERSION_STAMP = $(OUT_DIR)/.version-$(VERSION)
 GOCACHE ?= $(PWD)/.gocache
 GO_SOURCES := $(shell find . -type f -name '*.go' -not -path './.gocache/*' -not -path './build/*' -not -path './.git/*')
 VERSION := 0.1.0
-LDFLAGS := -X 'ollama-codex-cli/cmd.appVersion=$(VERSION)'
+LDFLAGS := -X 'github.com/mikoto2000/codew/cmd.appVersion=$(VERSION)'
 
 .PHONY: help all run chat doctor fmt vet test check clean
 

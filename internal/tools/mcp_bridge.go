@@ -3,7 +3,7 @@ package tools
 import (
 	"context"
 
-	"ollama-codex-cli/internal/ollama"
+	"github.com/mikoto2000/codew/internal/ollama"
 )
 
 func (e *Executor) executeMCP(call ollama.ToolCall, result map[string]any) string {

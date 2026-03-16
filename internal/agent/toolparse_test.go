@@ -3,7 +3,7 @@ package agent
 import (
 	"testing"
 
-	"ollama-codex-cli/internal/ollama"
+	"github.com/mikoto2000/codew/internal/ollama"
 )
 
 func TestExtractToolCallsDirect(t *testing.T) {

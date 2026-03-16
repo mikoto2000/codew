@@ -3,7 +3,7 @@ package chatloop
 import (
 	"testing"
 
-	"ollama-codex-cli/internal/tools"
+	"github.com/mikoto2000/codew/internal/tools"
 )
 
 func TestDecideAllowedForReadOnlyTool(t *testing.T) {

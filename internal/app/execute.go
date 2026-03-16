@@ -6,13 +6,13 @@ import (
 	"path/filepath"
 	"time"
 
-	"ollama-codex-cli/internal/checkpoint"
-	"ollama-codex-cli/internal/logging"
-	"ollama-codex-cli/internal/mcp"
-	"ollama-codex-cli/internal/modelprofile"
-	"ollama-codex-cli/internal/ollama"
-	"ollama-codex-cli/internal/projectdetect"
-	"ollama-codex-cli/internal/tools"
+	"github.com/mikoto2000/codew/internal/checkpoint"
+	"github.com/mikoto2000/codew/internal/logging"
+	"github.com/mikoto2000/codew/internal/mcp"
+	"github.com/mikoto2000/codew/internal/modelprofile"
+	"github.com/mikoto2000/codew/internal/ollama"
+	"github.com/mikoto2000/codew/internal/projectdetect"
+	"github.com/mikoto2000/codew/internal/tools"
 )
 
 type ExecuteOptions struct {

@@ -1,6 +1,6 @@
 package tools
 
-import "ollama-codex-cli/internal/ollama"
+import "github.com/mikoto2000/codew/internal/ollama"
 
 func Definitions() []ollama.ToolDefinition {
 	return []ollama.ToolDefinition{

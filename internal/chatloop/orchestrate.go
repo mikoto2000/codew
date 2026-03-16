@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"ollama-codex-cli/internal/ollama"
+	"github.com/mikoto2000/codew/internal/ollama"
 )
 
 func WithAutoContext(messages []ollama.Message, autoCtx string) []ollama.Message {

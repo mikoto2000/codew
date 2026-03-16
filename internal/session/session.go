@@ -1,6 +1,6 @@
 package session
 
-import "ollama-codex-cli/internal/ollama"
+import "github.com/mikoto2000/codew/internal/ollama"
 
 type Session struct {
 	Model   string

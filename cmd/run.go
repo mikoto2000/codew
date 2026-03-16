@@ -6,10 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"ollama-codex-cli/internal/app"
-	"ollama-codex-cli/internal/chatloop"
-	"ollama-codex-cli/internal/contextloader"
-	"ollama-codex-cli/internal/session"
+	"github.com/mikoto2000/codew/internal/app"
+	"github.com/mikoto2000/codew/internal/chatloop"
+	"github.com/mikoto2000/codew/internal/contextloader"
+	"github.com/mikoto2000/codew/internal/session"
 )
 
 var runCmd = &cobra.Command{

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"ollama-codex-cli/internal/ollama"
+	"github.com/mikoto2000/codew/internal/ollama"
 )
 
 const (

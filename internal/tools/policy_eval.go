@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"ollama-codex-cli/internal/ollama"
+	"github.com/mikoto2000/codew/internal/ollama"
 )
 
 func (e *Executor) preflight(call ollama.ToolCall, sandboxMode string) (map[string]any, bool) {

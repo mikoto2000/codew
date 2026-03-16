@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"ollama-codex-cli/internal/agent"
-	"ollama-codex-cli/internal/logging"
-	"ollama-codex-cli/internal/ollama"
-	"ollama-codex-cli/internal/session"
-	"ollama-codex-cli/internal/tools"
+	"github.com/mikoto2000/codew/internal/agent"
+	"github.com/mikoto2000/codew/internal/logging"
+	"github.com/mikoto2000/codew/internal/ollama"
+	"github.com/mikoto2000/codew/internal/session"
+	"github.com/mikoto2000/codew/internal/tools"
 )
 
 type ChatClient interface {

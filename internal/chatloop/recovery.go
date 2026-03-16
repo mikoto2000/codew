@@ -3,7 +3,7 @@ package chatloop
 import (
 	"fmt"
 
-	"ollama-codex-cli/internal/session"
+	"github.com/mikoto2000/codew/internal/session"
 )
 
 func ResumeSession(path string, s *session.Session) (bool, error) {

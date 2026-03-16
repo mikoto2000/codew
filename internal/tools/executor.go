@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"ollama-codex-cli/internal/mcp"
-	"ollama-codex-cli/internal/ollama"
+	"github.com/mikoto2000/codew/internal/mcp"
+	"github.com/mikoto2000/codew/internal/ollama"
 )
 
 const maxOutputChars = 12000

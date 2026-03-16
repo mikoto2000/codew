@@ -57,7 +57,7 @@
   - [x] `--auto-approve` 警告強化
   - [x] `web_search` の URL 出力方針統一
 
-- [ ] `go.mod` のモジュール名とリポジトリ名の整合を検討する
+- [x] `go.mod` のモジュール名とリポジトリ名の整合を取る
 
 ## Existing Progress
 

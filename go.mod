@@ -1,4 +1,4 @@
-module ollama-codex-cli
+module github.com/mikoto2000/codew
 
 go 1.25.0
 
