@@ -9,7 +9,7 @@
 - [ ] `cmd/chat.go` を分割し、会話制御を薄くする
   - [x] `internal/chatloop/runner.go`
   - [x] `internal/chatloop/approval.go`
-  - [ ] `internal/chatloop/recovery.go`
+  - [x] `internal/chatloop/recovery.go`
   - [x] `internal/chatloop/render.go`
   - [x] `internal/chatloop/orchestrate.go`
   - [x] `internal/chatloop/history.go`

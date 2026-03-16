@@ -86,12 +86,11 @@ func runChat(cmd *cobra.Command, _ []string) error {
 
 	s := session.New(deps.Model, buildSystemPrompt(withProjectHint(deps.System, deps.Project), toolsEnabled))
 	if resumeSession {
-		snap, loadErr := session.LoadFromFile(sessionPath)
+		resumed, loadErr := chatloop.ResumeSession(sessionPath, s)
 		if loadErr != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to resume session: %v\n", loadErr)
-		} else {
-			s.Restore(snap)
-			fmt.Printf("Resumed session from %s\n", sessionPath)
+		} else if resumed {
+			fmt.Println(chatloop.ResumeMessage(sessionPath))
 		}
 	}
 	toolDefs := deps.ToolDefs
@@ -525,11 +524,9 @@ func runCommand(ctx context.Context, line string, s *session.Session, sessionPat
 		fmt.Printf("session saved: %s\n", sessionPath)
 		return false, nil
 	case "/load":
-		snap, err := session.LoadFromFile(sessionPath)
-		if err != nil {
+		if err := chatloop.LoadSession(sessionPath, s); err != nil {
 			return false, err
 		}
-		s.Restore(snap)
 		fmt.Printf("session loaded: %s\n", sessionPath)
 		return false, nil
 	case "/checkpoint":
