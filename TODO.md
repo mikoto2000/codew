@@ -24,7 +24,7 @@
   - [x] post-edit validation
   - [x] JSON tool call 非表示
 
-- [ ] `internal/tools/executor.go` を責務ごとに分割する
+- [x] `internal/tools/executor.go` を責務ごとに分割する
   - [x] definitions
   - [x] policy_eval
   - [x] builtin_file
