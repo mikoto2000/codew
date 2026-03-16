@@ -3,14 +3,11 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
-	"ollama-codex-cli/internal/agent"
 	"ollama-codex-cli/internal/chatloop"
 	"ollama-codex-cli/internal/checkpoint"
 	"ollama-codex-cli/internal/contextloader"
@@ -76,35 +73,6 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 		tracePath = filepath.Join(workspaceAbs, tracePath)
 	}
 	turnLogger := logging.NewTurnLogger(tracePath)
-	turnStart := time.Now()
-	turnID := fmt.Sprintf("run-%d", turnStart.UnixNano())
-	turnToolCalls := 0
-	defer func() {
-		if traceLog {
-			errMsg := ""
-			if retErr != nil {
-				errMsg = retErr.Error()
-			}
-			_ = turnLogger.Append(logging.TraceEvent{
-				Event:      "turn_finished",
-				TurnID:     turnID,
-				Mode:       "run",
-				Input:      prompt,
-				DurationMS: time.Since(turnStart).Milliseconds(),
-				ToolCalls:  turnToolCalls,
-				Error:      errMsg,
-			})
-		}
-	}()
-	if traceLog {
-		_ = turnLogger.Append(logging.TraceEvent{
-			Event:  "turn_started",
-			TurnID: turnID,
-			Mode:   "run",
-			Input:  prompt,
-			Model:  chatModel,
-		})
-	}
 
 	s := session.New(chatModel, buildSystemPrompt(withProjectHint(systemText, project), toolsEnabled))
 	s.AddUser(prompt)
@@ -128,7 +96,6 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 		}
 	}
 
-	checkpointed := false
 	networkRules := map[string]bool{}
 	for _, t := range networkAllowTool {
 		t = strings.TrimSpace(t)
@@ -136,141 +103,44 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 			networkRules[t] = true
 		}
 	}
-	for step := 0; step < maxToolSteps; step++ {
-		messages := chatloop.WithAutoContext(s.MessagesForModel(maxContextChars), autoCtx)
-		ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
-		finishWorking := announceWorking("assistant is working")
-		msg, _, chatErr := chatWithRetry(ctx, client, s.Model, messages, toolDefs)
-		cancel()
-		finishWorking(chatErr == nil)
-		if chatErr != nil {
-			return chatErr
-		}
-		if traceLog {
-			_ = turnLogger.Append(logging.TraceEvent{
-				Event:  "model_response_received",
-				TurnID: turnID,
-				Step:   step + 1,
-				Mode:   "run",
-				Model:  s.Model,
-			})
-		}
-
-		parseResult := agent.ExtractToolCalls(msg, allowed)
-		toolCalls := parseResult.Calls
-		if parseResult.Parsed && len(toolCalls) == 0 && len(parseResult.Diagnostics) > 0 {
-			fmt.Fprintf(os.Stderr, "[toolparse] %s\n", agent.FormatDiagnostics(parseResult.Diagnostics))
-		}
-		if toolsEnabled && len(toolCalls) > 0 {
-			s.AddAssistantMessage(msg)
-			if traceLog {
-				for _, call := range toolCalls {
-					_ = turnLogger.Append(logging.TraceEvent{
-						Event:      "tool_call_parsed",
-						TurnID:     turnID,
-						Step:       step + 1,
-						ToolCallID: call.ID,
-						Tool:       call.Function.Name,
-						Mode:       "run",
-					})
-				}
-			}
-			results := map[int]string{}
-			if chatloop.CanOrchestrateInParallel(toolCalls, profile, sandbox, networkAllow, networkRules) {
-				parallel := chatloop.RunToolCallsOrchestrated(executor, toolCalls, sandbox)
-				for i, result := range parallel {
-					results[i] = result
-				}
-			} else {
-				for i, call := range toolCalls {
-					callSandbox := sandbox
-					decision := chatloop.Decide(chatloop.ApprovalRequest{
-						ToolName:     call.Function.Name,
-						IsMCP:        mcpManager != nil && mcpManager.HasTool(call.Function.Name),
-						IsMutating:   tools.IsMutatingTool(call.Function.Name),
-						Sandbox:      sandbox,
-						AutoApprove:  autoApprove,
-						NetworkAllow: networkAllow,
-						NetworkRules: networkRules,
-						Profile:      profile,
-					})
-					if decision == chatloop.DecisionDenied {
-						results[i] = `{"ok":false,"error":"tool call denied by policy"}`
-						if traceLog {
-							_ = turnLogger.Append(logging.TraceEvent{
-								Event:      "tool_call_denied",
-								TurnID:     turnID,
-								Step:       step + 1,
-								ToolCallID: call.ID,
-								Tool:       call.Function.Name,
-								Mode:       "run",
-								Error:      "tool call denied by policy",
-							})
-						}
-						continue
-					}
-					if decision == chatloop.DecisionNeedsNetworkEscalation {
-						if networkAllow || networkRules[call.Function.Name] {
-							callSandbox = tools.SandboxFull
-						}
-					}
-					if autoCheckpoint && !checkpointed && tools.IsMutatingTool(call.Function.Name) && !dryRun {
-						if id, e := cp.Create(); e == nil {
-							checkpointed = true
-							fmt.Fprintf(os.Stderr, "[checkpoint] created: %s\n", id)
-							if traceLog {
-								_ = turnLogger.Append(logging.TraceEvent{
-									Event:  "checkpoint_created",
-									TurnID: turnID,
-									Step:   step + 1,
-									Tool:   call.Function.Name,
-									Mode:   "run",
-								})
-							}
-						}
-					}
-					results[i] = executor.ExecuteWithSandbox(call, callSandbox)
-				}
-			}
-
-			for i, call := range toolCalls {
-				res := results[i]
-				s.AddTool(call.Function.Name, call.ID, res)
-				writeToolLog(toolLogger, prompt, call.Function.Name, chatloop.CompactJSON(call.Function.Arguments), res, true)
-				if traceLog {
-					_ = turnLogger.Append(logging.TraceEvent{
-						Event:      "tool_call_executed",
-						TurnID:     turnID,
-						Step:       step + 1,
-						ToolCallID: call.ID,
-						Tool:       call.Function.Name,
-						Mode:       "run",
-					})
-				}
-				turnToolCalls++
-				if autoValidate && tools.IsMutatingTool(call.Function.Name) && toolCallSucceeded(res) {
-					validateResult := runValidation(workspaceAbs, postEditCmds)
-					s.AddTool("post_validate", "", validateResult)
-					writeToolLog(toolLogger, prompt, "post_validate", strings.Join(postEditCmds, " && "), validateResult, true)
-					if traceLog {
-						_ = turnLogger.Append(logging.TraceEvent{
-							Event:  "post_validate_finished",
-							TurnID: turnID,
-							Step:   step + 1,
-							Tool:   call.Function.Name,
-							Mode:   "run",
-						})
-					}
-					turnToolCalls++
-				}
-			}
-			continue
-		}
-
-		answer := strings.TrimSpace(msg.Content)
-		s.AddAssistantMessage(msg)
-		fmt.Println(answer)
-		return nil
+	runner := chatloop.Runner{
+		Client:          client,
+		Executor:        executor,
+		Checkpoints:     cp,
+		ToolLogger:      toolLogger,
+		TraceLogger:     turnLogger,
+		Timeout:         timeout,
+		Retries:         retries,
+		RetryBackoff:    retryBackoff,
+		FallbackModel:   fallbackModel,
+		MaxToolSteps:    maxToolSteps,
+		MaxContextChars: maxContextChars,
+		AutoCheckpoint:  autoCheckpoint,
+		DryRun:          dryRun,
+		AutoValidate:    autoValidate,
+		PostEditCmds:    postEditCmds,
+		ToolLogEnabled:  toolLog,
+		TraceLogEnabled: traceLog,
 	}
-	return fmt.Errorf("max-tool-steps reached without final response")
+	finishWorking := announceWorking("assistant is working")
+	result, err := runner.Execute(cmd.Context(), chatloop.RunRequest{
+		Mode:         "run",
+		Prompt:       prompt,
+		Session:      s,
+		ToolDefs:     toolDefs,
+		Allowed:      allowed,
+		ToolsEnabled: toolsEnabled,
+		Profile:      profile,
+		Sandbox:      sandbox,
+		NetworkAllow: networkAllow,
+		NetworkRules: networkRules,
+		Workspace:    workspaceAbs,
+		AutoContext:  autoCtx,
+	})
+	finishWorking(err == nil)
+	if err != nil {
+		return err
+	}
+	fmt.Println(result.Answer)
+	return nil
 }

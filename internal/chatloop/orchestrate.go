@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"ollama-codex-cli/internal/ollama"
-	"ollama-codex-cli/internal/tools"
 )
 
 func WithAutoContext(messages []ollama.Message, autoCtx string) []ollama.Message {
@@ -49,7 +48,7 @@ func CanOrchestrateInParallel(calls []ollama.ToolCall, profile string, sandbox s
 	return true
 }
 
-func RunToolCallsOrchestrated(executor *tools.Executor, calls []ollama.ToolCall, sandbox string) []string {
+func RunToolCallsOrchestrated(executor ToolExecutor, calls []ollama.ToolCall, sandbox string) []string {
 	results := make([]string, len(calls))
 	done := make([]bool, len(calls))
 	remaining := len(calls)

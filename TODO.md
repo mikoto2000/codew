@@ -7,7 +7,7 @@
 `codew-review-pr-plan.md` をもとにした着手リスト。優先順。
 
 - [ ] `cmd/chat.go` を分割し、会話制御を薄くする
-  - [ ] `internal/chatloop/runner.go`
+  - [x] `internal/chatloop/runner.go`
   - [x] `internal/chatloop/approval.go`
   - [ ] `internal/chatloop/recovery.go`
   - [x] `internal/chatloop/render.go`
@@ -17,12 +17,12 @@
 - [x] 承認ロジックを 1 箇所に寄せる
   - `DecisionEngine` 相当を導入し、`allowed` / `denied` / `needs-user-approval` / `needs-network-escalation` を統一判定する
 
-- [ ] 会話ターン単位の統合テストを追加する
-  - tool 実行
-  - 拒否時の tool result 永続化
-  - checkpoint 作成
-  - post-edit validation
-  - JSON tool call 非表示
+- [x] 会話ターン単位の統合テストを追加する
+  - [x] tool 実行
+  - [x] 拒否時の tool result 永続化
+  - [x] checkpoint 作成
+  - [x] post-edit validation
+  - [x] JSON tool call 非表示
 
 - [ ] `internal/tools/executor.go` を責務ごとに分割する
   - definitions / policy_eval / builtin_file / builtin_shell / builtin_web / mcp_bridge
