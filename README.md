@@ -1,6 +1,13 @@
 # codew (Ollama Codex-like CLI)
 
 Go で書いた、Codex CLI 風の対話 CLI です。接続先は Ollama API (`/api/chat`) です。
+Go module は `github.com/mikoto2000/codew` です。
+
+## Install
+
+```bash
+go install github.com/mikoto2000/codew@latest
+```
 
 ## Build
 
@@ -70,10 +77,16 @@ go build -o codew .
 - 起動時にプロジェクトルートのファイル一覧から種別（例: `go`, `nodejs`, `python` など）を判定します。
 - 判定結果は起動時表示とシステムプロンプト補助ヒントに使われます。
 
-## Run
+## First Run
 
 ```bash
-./codew --host http://host.docker.internal:11434 --model qwen2.5-coder:14b
+./codew chat --host http://127.0.0.1:11434 --model llama3.2
+```
+
+非対話で 1 回だけ実行する場合:
+
+```bash
+./codew run "このリポジトリの構成を要約して"
 ```
 
 ## Flags
@@ -153,6 +166,7 @@ go build -o codew .
 ## Tool Calling
 
 `--tools=true` の場合、モデルがツール呼び出し JSON を返すとローカルで実行し、結果をモデルへ返送します。
+`codew chat` と `codew run` はどちらも同じツール実行ループを使います。
 
 対応ツール:
 - `shell_exec` (`command`, `workdir`, `timeout_sec`, `pty`)
@@ -285,6 +299,7 @@ index 1111111..2222222 100644
 
 - `codew review` は現在の `git diff` を対象に変更ファイルを `high/medium/low` で並べて表示します。
 - あわせて `*_test.go` の変更不足も簡易検出します。
+- 判定基準は現在 `cmd/` と `internal/tools/` を高優先として扱うシンプルなルールです。
 
 ## Non-interactive Mode
 
@@ -294,6 +309,7 @@ codew run "このリポジトリで TODO の進め方を提案して"
 
 - CI やスクリプト向けに 1 プロンプト実行して終了します。
 - 通常のツール呼び出しループ（`max-tool-steps` まで）も利用します。
+- `--auto-context`, `--auto-checkpoint`, `--auto-validate` も `run` で有効です。
 
 ## MCP Client (stdio)
 
