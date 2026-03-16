@@ -6,7 +6,7 @@
 
 `codew-review-pr-plan.md` をもとにした着手リスト。優先順。
 
-- [ ] `cmd/chat.go` を分割し、会話制御を薄くする
+- [x] `cmd/chat.go` を分割し、会話制御を薄くする
   - [x] `internal/chatloop/runner.go`
   - [x] `internal/chatloop/approval.go`
   - [x] `internal/chatloop/recovery.go`
