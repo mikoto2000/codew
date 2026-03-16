@@ -1,23 +1,15 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"ollama-codex-cli/internal/app"
 	"ollama-codex-cli/internal/chatloop"
-	"ollama-codex-cli/internal/checkpoint"
 	"ollama-codex-cli/internal/contextloader"
-	"ollama-codex-cli/internal/logging"
-	"ollama-codex-cli/internal/mcp"
-	"ollama-codex-cli/internal/modelprofile"
-	"ollama-codex-cli/internal/ollama"
-	"ollama-codex-cli/internal/projectdetect"
 	"ollama-codex-cli/internal/session"
-	"ollama-codex-cli/internal/tools"
 )
 
 var runCmd = &cobra.Command{
@@ -28,71 +20,42 @@ var runCmd = &cobra.Command{
 }
 
 func runOnce(cmd *cobra.Command, args []string) (retErr error) {
-	if err := modelprofile.Apply(modelProfile, &chatModel, &systemText, &toolProfile, &retries, func(name string) bool {
-		return cmd.Flags().Changed(name)
-	}); err != nil {
-		return err
-	}
-
 	prompt := strings.TrimSpace(args[0])
 	if prompt == "" {
 		return fmt.Errorf("prompt is empty")
 	}
 
-	workspaceAbs, err := filepath.Abs(workspaceRoot)
+	deps, cleanup, err := app.Prepare(func(name string) bool {
+		return cmd.Flags().Changed(name)
+	}, app.ExecuteOptions{
+		ModelProfile:  modelProfile,
+		ToolProfile:   toolProfile,
+		Model:         chatModel,
+		System:        systemText,
+		Retries:       retries,
+		WorkspaceRoot: workspaceRoot,
+		SandboxMode:   sandboxMode,
+		DryRun:        dryRun,
+		MCPEnabled:    mcpEnabled,
+		MCPConfig:     mcpConfig,
+		ChatHost:      chatHost,
+		Timeout:       timeout,
+		ToolLogFile:   toolLogFile,
+		TraceLogFile:  traceLogFile,
+	})
 	if err != nil {
 		return err
 	}
-	project := projectdetect.Detect(workspaceAbs)
-	profile := tools.NormalizeProfile(toolProfile)
-	sandbox := tools.NormalizeSandboxMode(sandboxMode)
-	client := ollama.NewClient(chatHost, timeout)
-	mcpManager := mcp.NewManager()
-	if mcpEnabled {
-		mcpCtx, cancelMCP := context.WithTimeout(cmd.Context(), timeout)
-		err = mcpManager.LoadAndStart(mcpCtx, workspaceAbs, mcpConfig)
-		cancelMCP()
-		if err != nil {
-			return fmt.Errorf("load mcp tools: %w", err)
-		}
-		defer mcpManager.Close()
-	}
-	executor, err := tools.NewExecutor(workspaceAbs, profile, dryRun, sandbox, mcpManager)
-	if err != nil {
-		return err
-	}
-	cp := checkpoint.New(workspaceAbs)
+	defer cleanup()
 
-	logPath := toolLogFile
-	if !filepath.IsAbs(logPath) {
-		logPath = filepath.Join(workspaceAbs, logPath)
-	}
-	toolLogger := logging.NewToolLogger(logPath)
-	tracePath := traceLogFile
-	if !filepath.IsAbs(tracePath) {
-		tracePath = filepath.Join(workspaceAbs, tracePath)
-	}
-	turnLogger := logging.NewTurnLogger(tracePath)
-
-	s := session.New(chatModel, buildSystemPrompt(withProjectHint(systemText, project), toolsEnabled))
+	s := session.New(deps.Model, buildSystemPrompt(withProjectHint(deps.System, deps.Project), toolsEnabled))
 	s.AddUser(prompt)
 
 	autoCtx := ""
 	if autoContext {
-		ctxText, ctxErr := contextloader.Build(workspaceAbs, prompt, autoContextFiles, autoContextChars)
+		ctxText, ctxErr := contextloader.Build(deps.Workspace, prompt, autoContextFiles, autoContextChars)
 		if ctxErr == nil {
 			autoCtx = ctxText
-		}
-	}
-
-	toolDefs := []ollama.ToolDefinition(nil)
-	allowed := map[string]struct{}{}
-	if toolsEnabled {
-		toolDefs = tools.DefinitionsForProfile(profile)
-		toolDefs = append(toolDefs, mcpManager.Definitions()...)
-		allowed = tools.AllowedToolNamesForProfile(profile)
-		for _, def := range mcpManager.Definitions() {
-			allowed[def.Function.Name] = struct{}{}
 		}
 	}
 
@@ -104,13 +67,13 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 		}
 	}
 	runner := chatloop.Runner{
-		Client:          client,
-		Executor:        executor,
-		Checkpoints:     cp,
-		ToolLogger:      toolLogger,
-		TraceLogger:     turnLogger,
+		Client:          deps.Client,
+		Executor:        deps.Executor,
+		Checkpoints:     deps.Checkpoints,
+		ToolLogger:      deps.ToolLogger,
+		TraceLogger:     deps.TurnLogger,
 		Timeout:         timeout,
-		Retries:         retries,
+		Retries:         deps.Retries,
 		RetryBackoff:    retryBackoff,
 		FallbackModel:   fallbackModel,
 		MaxToolSteps:    maxToolSteps,
@@ -127,14 +90,14 @@ func runOnce(cmd *cobra.Command, args []string) (retErr error) {
 		Mode:         "run",
 		Prompt:       prompt,
 		Session:      s,
-		ToolDefs:     toolDefs,
-		Allowed:      allowed,
+		ToolDefs:     deps.ToolDefs,
+		Allowed:      deps.Allowed,
 		ToolsEnabled: toolsEnabled,
-		Profile:      profile,
-		Sandbox:      sandbox,
+		Profile:      deps.Profile,
+		Sandbox:      deps.Sandbox,
 		NetworkAllow: networkAllow,
 		NetworkRules: networkRules,
-		Workspace:    workspaceAbs,
+		Workspace:    deps.Workspace,
 		AutoContext:  autoCtx,
 	})
 	finishWorking(err == nil)

@@ -17,15 +17,13 @@ import (
 	"github.com/spf13/cobra"
 
 	"ollama-codex-cli/internal/agent"
+	"ollama-codex-cli/internal/app"
 	"ollama-codex-cli/internal/chatloop"
 	"ollama-codex-cli/internal/checkpoint"
 	"ollama-codex-cli/internal/contextloader"
 	"ollama-codex-cli/internal/logging"
-	"ollama-codex-cli/internal/mcp"
-	"ollama-codex-cli/internal/modelprofile"
 	"ollama-codex-cli/internal/ollama"
 	"ollama-codex-cli/internal/plan"
-	"ollama-codex-cli/internal/projectdetect"
 	"ollama-codex-cli/internal/session"
 	"ollama-codex-cli/internal/tools"
 )
@@ -46,35 +44,32 @@ var chatCmd = &cobra.Command{
 }
 
 func runChat(cmd *cobra.Command, _ []string) error {
-	if err := modelprofile.Apply(modelProfile, &chatModel, &systemText, &toolProfile, &retries, func(name string) bool {
+	deps, cleanup, err := app.Prepare(func(name string) bool {
 		return cmd.Flags().Changed(name)
-	}); err != nil {
-		return err
-	}
-
-	client := ollama.NewClient(chatHost, timeout)
-	profile := tools.NormalizeProfile(toolProfile)
-	sandbox := tools.NormalizeSandboxMode(sandboxMode)
-	workspaceAbs, err := filepath.Abs(workspaceRoot)
-	if err != nil {
-		return fmt.Errorf("resolve workspace: %w", err)
-	}
-	project := projectdetect.Detect(workspaceAbs)
-	mcpManager := mcp.NewManager()
-	if mcpEnabled {
-		mcpCtx, cancelMCP := context.WithTimeout(cmd.Context(), timeout)
-		err = mcpManager.LoadAndStart(mcpCtx, workspaceAbs, mcpConfig)
-		cancelMCP()
-		if err != nil {
-			return fmt.Errorf("load mcp tools: %w", err)
-		}
-		defer mcpManager.Close()
-	}
-	executor, err := tools.NewExecutor(workspaceAbs, profile, dryRun, sandbox, mcpManager)
+	}, app.ExecuteOptions{
+		ModelProfile:  modelProfile,
+		ToolProfile:   toolProfile,
+		Model:         chatModel,
+		System:        systemText,
+		Retries:       retries,
+		WorkspaceRoot: workspaceRoot,
+		SandboxMode:   sandboxMode,
+		DryRun:        dryRun,
+		MCPEnabled:    mcpEnabled,
+		MCPConfig:     mcpConfig,
+		ChatHost:      chatHost,
+		Timeout:       timeout,
+		ToolLogFile:   toolLogFile,
+		TraceLogFile:  traceLogFile,
+	})
 	if err != nil {
 		return err
 	}
-	checkpoints := checkpoint.New(workspaceAbs)
+	defer cleanup()
+	workspaceAbs := deps.Workspace
+	profile := deps.Profile
+	sandbox := deps.Sandbox
+	checkpoints := deps.Checkpoints
 	sessionPath, err := filepath.Abs(sessionFile)
 	if err != nil {
 		return fmt.Errorf("resolve session-file: %w", err)
@@ -83,15 +78,13 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	if !filepath.IsAbs(logPath) {
 		logPath = filepath.Join(workspaceAbs, logPath)
 	}
-	toolLogger := logging.NewToolLogger(logPath)
 	tracePath := traceLogFile
 	if !filepath.IsAbs(tracePath) {
 		tracePath = filepath.Join(workspaceAbs, tracePath)
 	}
-	turnLogger := logging.NewTurnLogger(tracePath)
 	historyPath := filepath.Join(workspaceAbs, ".codew", "history.txt")
 
-	s := session.New(chatModel, buildSystemPrompt(withProjectHint(systemText, project), toolsEnabled))
+	s := session.New(deps.Model, buildSystemPrompt(withProjectHint(deps.System, deps.Project), toolsEnabled))
 	if resumeSession {
 		snap, loadErr := session.LoadFromFile(sessionPath)
 		if loadErr != nil {
@@ -101,19 +94,11 @@ func runChat(cmd *cobra.Command, _ []string) error {
 			fmt.Printf("Resumed session from %s\n", sessionPath)
 		}
 	}
-	toolDefs := []ollama.ToolDefinition(nil)
-	allowed := map[string]struct{}{}
-	if toolsEnabled {
-		toolDefs = tools.DefinitionsForProfile(profile)
-		toolDefs = append(toolDefs, mcpManager.Definitions()...)
-		allowed = tools.AllowedToolNamesForProfile(profile)
-		for _, def := range mcpManager.Definitions() {
-			allowed[def.Function.Name] = struct{}{}
-		}
-	}
+	toolDefs := deps.ToolDefs
+	allowed := deps.Allowed
 
 	fmt.Printf("Connected target: %s\n", chatHost)
-	fmt.Printf("Project type: %s (%s)\n", project.Primary, strings.Join(project.All, ","))
+	fmt.Printf("Project type: %s (%s)\n", deps.Project.Primary, strings.Join(deps.Project.All, ","))
 	fmt.Printf("Model: %s\n", s.Model)
 	if modelProfile != "" {
 		fmt.Printf("Model profile: %s\n", modelProfile)
@@ -125,14 +110,14 @@ func runChat(cmd *cobra.Command, _ []string) error {
 		fmt.Println("Warning: auto-approve skips mutating tool confirmation prompts.")
 	}
 	fmt.Printf("Network escalation: allow=%t allow-tools=%v\n", networkAllow, networkAllowTool)
-	fmt.Printf("MCP: %t (config=%s, tools=%d)\n", mcpEnabled, mcpConfig, len(mcpManager.Definitions()))
+	fmt.Printf("MCP: %t (config=%s, tools=%d)\n", mcpEnabled, mcpConfig, len(deps.MCPManager.Definitions()))
 	fmt.Printf("Context limit: %d chars\n", maxContextChars)
 	fmt.Printf("Auto context: %t (files=%d chars=%d)\n", autoContext, autoContextFiles, autoContextChars)
 	fmt.Printf("Dry run: %t\n", dryRun)
 	fmt.Printf("Auto checkpoint: %t\n", autoCheckpoint)
 	fmt.Printf("Tool log: %t (%s)\n", toolLog, logPath)
 	fmt.Printf("Trace log: %t (%s)\n", traceLog, tracePath)
-	fmt.Printf("Retries: %d (backoff=%s, fallback=%s)\n", retries, retryBackoff, fallbackModel)
+	fmt.Printf("Retries: %d (backoff=%s, fallback=%s)\n", deps.Retries, retryBackoff, fallbackModel)
 	fmt.Printf("Session file: %s (auto-save=%t)\n", sessionPath, autoSave)
 	fmt.Println("Commands: /exit, /model <name>, /models, /system <text>, /reset, /save, /load, /checkpoint, /undo, /help")
 
@@ -176,7 +161,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 		lineEditor.AppendHistory(line)
 
 		if strings.HasPrefix(line, "/") {
-			done, cmdErr := runCommand(cmd.Context(), line, s, sessionPath, checkpoints, planner, client)
+			done, cmdErr := runCommand(cmd.Context(), line, s, sessionPath, checkpoints, planner, deps.Client)
 			if cmdErr != nil {
 				fmt.Fprintf(os.Stderr, "command error: %v\n", cmdErr)
 			} else if autoSave {
@@ -196,7 +181,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 		turnToolCalls := 0
 		turnErr := ""
 		if traceLog {
-			_ = turnLogger.Append(logging.TraceEvent{
+			_ = deps.TurnLogger.Append(logging.TraceEvent{
 				Event:  "turn_started",
 				TurnID: turnID,
 				Mode:   "chat",
@@ -222,7 +207,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 			messages := chatloop.WithAutoContext(s.MessagesForModel(maxContextChars), autoCtx)
 			ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
 			finishWorking := announceWorking("assistant is working")
-			msg, usedModel, chatErr := chatWithRetry(ctx, client, s.Model, messages, toolDefs)
+			msg, usedModel, chatErr := chatWithRetry(ctx, deps.Client, s.Model, messages, toolDefs)
 			cancel()
 			finishWorking(chatErr == nil)
 
@@ -238,7 +223,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 				break
 			}
 			if traceLog {
-				_ = turnLogger.Append(logging.TraceEvent{
+				_ = deps.TurnLogger.Append(logging.TraceEvent{
 					Event:  "model_response_received",
 					TurnID: turnID,
 					Step:   step + 1,
@@ -255,7 +240,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 			if toolsEnabled && len(toolCalls) > 0 {
 				if traceLog {
 					for _, call := range toolCalls {
-						_ = turnLogger.Append(logging.TraceEvent{
+						_ = deps.TurnLogger.Append(logging.TraceEvent{
 							Event:      "tool_call_parsed",
 							TurnID:     turnID,
 							Step:       step + 1,
@@ -268,14 +253,14 @@ func runChat(cmd *cobra.Command, _ []string) error {
 				msg.ToolCalls = toolCalls
 				s.AddAssistantMessage(msg)
 				if chatloop.CanOrchestrateInParallel(toolCalls, profile, sandbox, networkAllow, networkRules) {
-					results := chatloop.RunToolCallsOrchestrated(executor, toolCalls, sandbox)
+					results := chatloop.RunToolCallsOrchestrated(deps.Executor, toolCalls, sandbox)
 					for i, call := range toolCalls {
 						toolResult := results[i]
 						s.AddTool(call.Function.Name, call.ID, toolResult)
 						fmt.Printf("\n[tool:%s] %s\n", call.Function.Name, chatloop.SummarizeToolResult(toolResult))
-						writeToolLog(toolLogger, line, call.Function.Name, chatloop.CompactJSON(call.Function.Arguments), toolResult, true)
+						writeToolLog(deps.ToolLogger, line, call.Function.Name, chatloop.CompactJSON(call.Function.Arguments), toolResult, true)
 						if traceLog {
-							_ = turnLogger.Append(logging.TraceEvent{
+							_ = deps.TurnLogger.Append(logging.TraceEvent{
 								Event:      "tool_call_executed",
 								TurnID:     turnID,
 								Step:       step + 1,
@@ -292,7 +277,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 				for _, call := range toolCalls {
 					decision := chatloop.Decide(chatloop.ApprovalRequest{
 						ToolName:     call.Function.Name,
-						IsMCP:        mcpManager != nil && mcpManager.HasTool(call.Function.Name),
+						IsMCP:        deps.MCPManager != nil && deps.MCPManager.HasTool(call.Function.Name),
 						IsMutating:   tools.IsMutatingTool(call.Function.Name),
 						Sandbox:      sandbox,
 						AutoApprove:  approveAll,
@@ -304,9 +289,9 @@ func runChat(cmd *cobra.Command, _ []string) error {
 						toolResult := `{"ok":false,"error":"tool call denied by policy"}`
 						s.AddTool(call.Function.Name, call.ID, toolResult)
 						fmt.Printf("\n[tool:%s] denied\n", call.Function.Name)
-						writeToolLog(toolLogger, line, call.Function.Name, chatloop.CompactJSON(call.Function.Arguments), toolResult, false)
+						writeToolLog(deps.ToolLogger, line, call.Function.Name, chatloop.CompactJSON(call.Function.Arguments), toolResult, false)
 						if traceLog {
-							_ = turnLogger.Append(logging.TraceEvent{
+							_ = deps.TurnLogger.Append(logging.TraceEvent{
 								Event:      "tool_call_denied",
 								TurnID:     turnID,
 								Step:       step + 1,
@@ -332,9 +317,9 @@ func runChat(cmd *cobra.Command, _ []string) error {
 							toolResult := `{"ok":false,"error":"tool call rejected by user"}`
 							s.AddTool(call.Function.Name, call.ID, toolResult)
 							fmt.Printf("\n[tool:%s] rejected\n", call.Function.Name)
-							writeToolLog(toolLogger, line, call.Function.Name, chatloop.CompactJSON(call.Function.Arguments), toolResult, false)
+							writeToolLog(deps.ToolLogger, line, call.Function.Name, chatloop.CompactJSON(call.Function.Arguments), toolResult, false)
 							if traceLog {
-								_ = turnLogger.Append(logging.TraceEvent{
+								_ = deps.TurnLogger.Append(logging.TraceEvent{
 									Event:      "tool_call_denied",
 									TurnID:     turnID,
 									Step:       step + 1,
@@ -360,9 +345,9 @@ func runChat(cmd *cobra.Command, _ []string) error {
 							toolResult := `{"ok":false,"error":"network escalation denied by user"}`
 							s.AddTool(call.Function.Name, call.ID, toolResult)
 							fmt.Printf("[tool:%s] denied network escalation\n", call.Function.Name)
-							writeToolLog(toolLogger, line, call.Function.Name, chatloop.CompactJSON(call.Function.Arguments), toolResult, false)
+							writeToolLog(deps.ToolLogger, line, call.Function.Name, chatloop.CompactJSON(call.Function.Arguments), toolResult, false)
 							if traceLog {
-								_ = turnLogger.Append(logging.TraceEvent{
+								_ = deps.TurnLogger.Append(logging.TraceEvent{
 									Event:      "tool_call_denied",
 									TurnID:     turnID,
 									Step:       step + 1,
@@ -384,7 +369,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 							turnCheckpointed = true
 							fmt.Printf("[checkpoint] created: %s\n", id)
 							if traceLog {
-								_ = turnLogger.Append(logging.TraceEvent{
+								_ = deps.TurnLogger.Append(logging.TraceEvent{
 									Event:  "checkpoint_created",
 									TurnID: turnID,
 									Step:   step + 1,
@@ -394,12 +379,12 @@ func runChat(cmd *cobra.Command, _ []string) error {
 							}
 						}
 					}
-					toolResult := executor.ExecuteWithSandbox(call, callSandbox)
+					toolResult := deps.Executor.ExecuteWithSandbox(call, callSandbox)
 					s.AddTool(call.Function.Name, call.ID, toolResult)
 					fmt.Printf("[tool:%s] %s\n", call.Function.Name, chatloop.SummarizeToolResult(toolResult))
-					writeToolLog(toolLogger, line, call.Function.Name, chatloop.CompactJSON(call.Function.Arguments), toolResult, true)
+					writeToolLog(deps.ToolLogger, line, call.Function.Name, chatloop.CompactJSON(call.Function.Arguments), toolResult, true)
 					if traceLog {
-						_ = turnLogger.Append(logging.TraceEvent{
+						_ = deps.TurnLogger.Append(logging.TraceEvent{
 							Event:      "tool_call_executed",
 							TurnID:     turnID,
 							Step:       step + 1,
@@ -413,9 +398,9 @@ func runChat(cmd *cobra.Command, _ []string) error {
 						validateResult := runValidation(workspaceAbs, postEditCmds)
 						s.AddTool("post_validate", "", validateResult)
 						fmt.Printf("[post-validate] %s\n", chatloop.SummarizeToolResult(validateResult))
-						writeToolLog(toolLogger, line, "post_validate", strings.Join(postEditCmds, " && "), validateResult, true)
+						writeToolLog(deps.ToolLogger, line, "post_validate", strings.Join(postEditCmds, " && "), validateResult, true)
 						if traceLog {
-							_ = turnLogger.Append(logging.TraceEvent{
+							_ = deps.TurnLogger.Append(logging.TraceEvent{
 								Event:  "post_validate_finished",
 								TurnID: turnID,
 								Step:   step + 1,
@@ -450,7 +435,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 			if !finalPrinted {
 				turnErr = "no_response"
 			}
-			_ = turnLogger.Append(logging.TraceEvent{
+			_ = deps.TurnLogger.Append(logging.TraceEvent{
 				Event:      "turn_finished",
 				TurnID:     turnID,
 				Mode:       "chat",
