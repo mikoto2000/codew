@@ -43,6 +43,9 @@ var chatCmd = &cobra.Command{
 }
 
 func runChat(cmd *cobra.Command, _ []string) error {
+	if err := applyStartupSessionDefaults(cmd); err != nil {
+		return err
+	}
 	deps, cleanup, err := app.Prepare(func(name string) bool {
 		return cmd.Flags().Changed(name)
 	}, app.ExecuteOptions{
@@ -84,6 +87,13 @@ func runChat(cmd *cobra.Command, _ []string) error {
 	historyPath := filepath.Join(workspaceAbs, ".codew", "history.txt")
 
 	s := session.New(deps.Model, buildSystemPrompt(withProjectHint(deps.System, deps.Project), toolsEnabled))
+	if autoSave {
+		defer func() {
+			if saveErr := chatloop.SaveSessionSnapshot(sessionPath, s, chatHost); saveErr != nil {
+				fmt.Fprintf(os.Stderr, "warning: auto-save failed: %v\n", saveErr)
+			}
+		}()
+	}
 	if resumeSession {
 		resumed, loadErr := chatloop.ResumeSession(sessionPath, s)
 		if loadErr != nil {
@@ -161,6 +171,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 		if strings.HasPrefix(line, "/") {
 			done, cmdErr := chatloop.ExecuteCommand(cmd.Context(), line, s, checkpoints, planner, deps.Client, chatloop.CommandOptions{
 				SessionPath:       sessionPath,
+				ChatHost:          chatHost,
 				ToolsEnabled:      toolsEnabled,
 				Timeout:           timeout,
 				BuildSystemPrompt: buildSystemPrompt,
@@ -168,7 +179,7 @@ func runChat(cmd *cobra.Command, _ []string) error {
 			if cmdErr != nil {
 				fmt.Fprintf(os.Stderr, "command error: %v\n", cmdErr)
 			} else if autoSave {
-				if saveErr := chatloop.SaveSessionSnapshot(sessionPath, s); saveErr != nil {
+				if saveErr := chatloop.SaveSessionSnapshot(sessionPath, s, chatHost); saveErr != nil {
 					fmt.Fprintf(os.Stderr, "warning: auto-save failed: %v\n", saveErr)
 				}
 			}
@@ -449,11 +460,33 @@ func runChat(cmd *cobra.Command, _ []string) error {
 			})
 		}
 		if autoSave {
-			if saveErr := chatloop.SaveSessionSnapshot(sessionPath, s); saveErr != nil {
+			if saveErr := chatloop.SaveSessionSnapshot(sessionPath, s, chatHost); saveErr != nil {
 				fmt.Fprintf(os.Stderr, "warning: auto-save failed: %v\n", saveErr)
 			}
 		}
 	}
+}
+
+func applyStartupSessionDefaults(cmd *cobra.Command) error {
+	sessionPath, err := filepath.Abs(sessionFile)
+	if err != nil {
+		return fmt.Errorf("resolve session-file: %w", err)
+	}
+	snap, err := session.LoadFromFile(sessionPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		fmt.Fprintf(os.Stderr, "warning: failed to load startup session defaults: %v\n", err)
+		return nil
+	}
+	if !cmd.Flags().Changed("host") && snap.Host != "" {
+		chatHost = snap.Host
+	}
+	if !cmd.Flags().Changed("model") && snap.Model != "" {
+		chatModel = snap.Model
+	}
+	return nil
 }
 
 func toolCallSucceeded(raw string) bool {

@@ -15,6 +15,7 @@ import (
 
 type CommandOptions struct {
 	SessionPath       string
+	ChatHost          string
 	ToolsEnabled      bool
 	Timeout           time.Duration
 	BuildSystemPrompt func(string, bool) string
@@ -86,7 +87,7 @@ func ExecuteCommand(ctx context.Context, line string, s *session.Session, checkp
 		fmt.Println("/plan-done N   : mark item N completed")
 		return false, nil
 	case "/save":
-		if err := SaveSessionSnapshot(opts.SessionPath, s); err != nil {
+		if err := SaveSessionSnapshot(opts.SessionPath, s, opts.ChatHost); err != nil {
 			return false, err
 		}
 		fmt.Printf("session saved: %s\n", opts.SessionPath)

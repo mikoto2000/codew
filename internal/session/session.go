@@ -9,6 +9,7 @@ type Session struct {
 }
 
 type Snapshot struct {
+	Host    string           `json:"host,omitempty"`
 	Model   string           `json:"model"`
 	System  string           `json:"system"`
 	History []ollama.Message `json:"history"`
@@ -58,8 +59,9 @@ func (s *Session) Messages() []ollama.Message {
 	return out
 }
 
-func (s *Session) Snapshot() Snapshot {
+func (s *Session) Snapshot(host string) Snapshot {
 	return Snapshot{
+		Host:    host,
 		Model:   s.Model,
 		System:  s.System,
 		History: s.Messages(),

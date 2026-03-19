@@ -68,7 +68,7 @@ func Execute() error {
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&chatHost, "host", getEnv("OLLAMA_HOST", "http://127.0.0.1:11434"), "Ollama API host")
-	rootCmd.PersistentFlags().StringVar(&chatModel, "model", getEnv("OLLAMA_MODEL", "llama3.2"), "Default model name")
+	rootCmd.PersistentFlags().StringVar(&chatModel, "model", getEnv("OLLAMA_MODEL", "qwen2.5-coder:14b"), "Default model name")
 	rootCmd.PersistentFlags().StringVar(&systemText, "system", getEnv("OLLAMA_SYSTEM", "You are a coding assistant."), "System prompt")
 	rootCmd.PersistentFlags().DurationVar(&timeout, "timeout", 120*time.Second, "HTTP request timeout")
 	rootCmd.PersistentFlags().BoolVar(&toolsEnabled, "tools", true, "Enable tool calling")

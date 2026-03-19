@@ -80,7 +80,7 @@ go build -o codew .
 ## First Run
 
 ```bash
-./codew chat --host http://127.0.0.1:11434 --model llama3.2
+./codew chat --host http://127.0.0.1:11434 --model qwen2.5-coder:14b
 ```
 
 非対話で 1 回だけ実行する場合:
@@ -93,15 +93,15 @@ go build -o codew .
 
 | Flag | 概要 | Default |
 | --- | --- | --- |
-| `--host` | Ollama API の接続先 URL を指定します。 | `http://127.0.0.1:11434` |
-| `--model` | 利用する既定モデル名を指定します。 | `llama3.2` |
+| `--host` | Ollama API の接続先 URL を指定します。未指定時は前回保存値、なければ既定値を使います。 | `http://127.0.0.1:11434` |
+| `--model` | 利用する既定モデル名を指定します。未指定時は前回保存値、なければ既定値を使います。 | `qwen2.5-coder:14b` |
 | `--system` | システムプロンプト文を上書きします。 | (none) |
 | `--timeout` | API リクエストのタイムアウト時間です。 | `120s` |
 | `--tools` | ツール呼び出し機能の有効/無効を切り替えます。 | `true` |
 | `--auto-approve` | ツール実行時の承認確認を省略します。 | `false` |
 | `--workspace` | ツール操作の基準となるワークスペースルートです。 | `.` |
 | `--max-tool-steps` | 1ターン内のツール呼び出しラウンド上限です。 | `8` |
-| `--session-file` | 会話履歴の保存/復元先ファイルです。 | `.codew/session.json` |
+| `--session-file` | 会話履歴と前回利用した `host` / `model` の保存先です。 | `.codew/session.json` |
 | `--resume` | 起動時に `--session-file` からセッションを復元します。 | `false` |
 | `--auto-save` | 各ターン後にセッションを自動保存します。 | `true` |
 | `--max-context-chars` | モデル送信前の会話文脈の最大文字数目安です。 | `24000` |
@@ -132,7 +132,7 @@ go build -o codew .
 | Variable | 概要 | Default |
 | --- | --- | --- |
 | `OLLAMA_HOST` | Ollama API 接続先を `--host` の初期値として設定します。 | `http://127.0.0.1:11434` |
-| `OLLAMA_MODEL` | 既定モデル名を `--model` の初期値として設定します。 | `llama3.2` |
+| `OLLAMA_MODEL` | 既定モデル名を `--model` の初期値として設定します。 | `qwen2.5-coder:14b` |
 | `OLLAMA_SYSTEM` | システムプロンプトを `--system` の初期値として設定します。 | `You are a coding assistant.` |
 
 ## In-chat Commands

@@ -38,8 +38,8 @@ func SaveLineHistory(lineEditor *liner.State, path string) error {
 	return err
 }
 
-func SaveSessionSnapshot(path string, s *session.Session) error {
-	return session.SaveToFile(path, s.Snapshot())
+func SaveSessionSnapshot(path string, s *session.Session, host string) error {
+	return session.SaveToFile(path, s.Snapshot(host))
 }
 
 func ParsePositiveInt(raw string) (int, error) {
