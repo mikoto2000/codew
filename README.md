@@ -229,6 +229,7 @@ index 1111111..2222222 100644
 - 対話系ツールやTTY前提のコマンドで利用できます。
 - `shell_exec` は安全側のデフォルトとして、`git status`, `git diff`, `go test`, `rg` などの許可コマンドに限定されます。
 - プロジェクトごとに `.codew/config.json` の `shell_allow` で allowlist を追加できます。
+- 対話モードでは、未許可コマンドが要求されたときに `今回だけ許可` または `.codew/config.json` へ `追加` を選べます。
 
 設定例 (`.codew/config.json`):
 

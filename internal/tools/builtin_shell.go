@@ -17,15 +17,27 @@ type shellArgs struct {
 	PTY        bool   `json:"pty"`
 }
 
-func (e *Executor) shellExec(raw json.RawMessage) (map[string]any, error) {
+func ShellCommand(raw json.RawMessage) (string, error) {
 	var in shellArgs
 	if err := decodeArgs(raw, &in); err != nil {
-		return nil, err
+		return "", err
 	}
 	if strings.TrimSpace(in.Command) == "" {
-		return nil, errors.New("command is required")
+		return "", errors.New("command is required")
 	}
-	if err := CheckShellCommandAllowed(e.profile, in.Command, e.shellAllow); err != nil {
+	return strings.TrimSpace(in.Command), nil
+}
+
+func (e *Executor) shellExec(raw json.RawMessage) (map[string]any, error) {
+	command, err := ShellCommand(raw)
+	if err != nil {
+		return nil, err
+	}
+	if err := e.CheckShellCommandAllowed(command); err != nil {
+		return nil, err
+	}
+	var in shellArgs
+	if err := decodeArgs(raw, &in); err != nil {
 		return nil, err
 	}
 	if in.TimeoutSec <= 0 {
@@ -54,7 +66,7 @@ func (e *Executor) shellExec(raw json.RawMessage) (map[string]any, error) {
 	var stdout, stderr bytes.Buffer
 	c.Stdout = &stdout
 	c.Stderr = &stderr
-	err := c.Run()
+	err = c.Run()
 
 	out := map[string]any{
 		"workdir": dir,

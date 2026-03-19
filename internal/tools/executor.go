@@ -41,6 +41,23 @@ func AllowedToolNames() map[string]struct{} {
 	return AllowedToolNamesForProfile(ProfileFull)
 }
 
+func (e *Executor) CheckShellCommandAllowed(command string) error {
+	return CheckShellCommandAllowed(e.profile, command, e.shellAllow)
+}
+
+func (e *Executor) AddShellAllow(command string) {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return
+	}
+	for _, existing := range e.shellAllow {
+		if existing == command {
+			return
+		}
+	}
+	e.shellAllow = append(e.shellAllow, command)
+}
+
 func (e *Executor) Execute(call ollama.ToolCall) string {
 	return e.executeWithSandbox(call, e.sandbox)
 }

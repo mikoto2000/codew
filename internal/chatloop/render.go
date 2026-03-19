@@ -45,6 +45,21 @@ func AskNetworkEscalation(lineEditor *liner.State, toolName string) (allowOnce b
 	}
 }
 
+func AskShellAllowlist(lineEditor *liner.State, command string) (allowOnce bool, allowAlways bool) {
+	line, err := lineEditor.Prompt(fmt.Sprintf("shell command %q is not in allowlist. allow once [y], add to config [a], deny [N]: ", command))
+	if err != nil {
+		return false, false
+	}
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true, false
+	case "a", "all", "always":
+		return false, true
+	default:
+		return false, false
+	}
+}
+
 func CompactJSON(raw json.RawMessage) string {
 	if len(raw) == 0 {
 		return "{}"

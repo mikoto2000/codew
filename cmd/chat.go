@@ -19,6 +19,7 @@ import (
 	"github.com/mikoto2000/codew/internal/agent"
 	"github.com/mikoto2000/codew/internal/app"
 	"github.com/mikoto2000/codew/internal/chatloop"
+	"github.com/mikoto2000/codew/internal/codewconfig"
 	"github.com/mikoto2000/codew/internal/contextloader"
 	"github.com/mikoto2000/codew/internal/logging"
 	"github.com/mikoto2000/codew/internal/ollama"
@@ -390,6 +391,58 @@ func runChat(cmd *cobra.Command, _ []string) error {
 									Tool:   call.Function.Name,
 									Mode:   "chat",
 								})
+							}
+						}
+					}
+					if call.Function.Name == "shell_exec" {
+						command, shellErr := tools.ShellCommand(call.Function.Arguments)
+						if shellErr == nil {
+							if allowErr := deps.Executor.CheckShellCommandAllowed(command); allowErr != nil {
+								allowOnce, allowAlways := chatloop.AskShellAllowlist(lineEditor, command)
+								if allowAlways {
+									if err := codewconfig.AddShellAllow(workspaceAbs, command); err != nil {
+										toolResult := fmt.Sprintf(`{"ok":false,"error":%q}`, "failed to update .codew/config.json: "+err.Error())
+										s.AddTool(call.Function.Name, call.ID, toolResult)
+										fmt.Printf("[tool:%s] failed to update allowlist\n", call.Function.Name)
+										writeToolLog(deps.ToolLogger, line, call.Function.Name, chatloop.CompactJSON(call.Function.Arguments), toolResult, false)
+										if traceLog {
+											_ = deps.TurnLogger.Append(logging.TraceEvent{
+												Event:      "tool_call_denied",
+												TurnID:     turnID,
+												Step:       step + 1,
+												ToolCallID: call.ID,
+												Tool:       call.Function.Name,
+												Mode:       "chat",
+												Error:      "failed to update shell allowlist",
+											})
+										}
+										turnToolCalls++
+										continue
+									}
+									deps.Executor.AddShellAllow(command)
+									fmt.Printf("[tool:%s] added to .codew/config.json: %s\n", call.Function.Name, command)
+								} else if allowOnce {
+									deps.Executor.AddShellAllow(command)
+									fmt.Printf("[tool:%s] allow once: %s\n", call.Function.Name, command)
+								} else {
+									toolResult := `{"ok":false,"error":"shell command rejected by user"}`
+									s.AddTool(call.Function.Name, call.ID, toolResult)
+									fmt.Printf("[tool:%s] rejected\n", call.Function.Name)
+									writeToolLog(deps.ToolLogger, line, call.Function.Name, chatloop.CompactJSON(call.Function.Arguments), toolResult, false)
+									if traceLog {
+										_ = deps.TurnLogger.Append(logging.TraceEvent{
+											Event:      "tool_call_denied",
+											TurnID:     turnID,
+											Step:       step + 1,
+											ToolCallID: call.ID,
+											Tool:       call.Function.Name,
+											Mode:       "chat",
+											Error:      "shell command rejected by user",
+										})
+									}
+									turnToolCalls++
+									continue
+								}
 							}
 						}
 					}

@@ -37,3 +37,22 @@ func TestLoadShellAllow(t *testing.T) {
 		t.Fatalf("ShellAllow = %#v, want %#v", cfg.ShellAllow, want)
 	}
 }
+
+func TestAddShellAllow(t *testing.T) {
+	ws := t.TempDir()
+	if err := AddShellAllow(ws, "terraform plan"); err != nil {
+		t.Fatalf("AddShellAllow: %v", err)
+	}
+	if err := AddShellAllow(ws, "terraform plan"); err != nil {
+		t.Fatalf("AddShellAllow duplicate: %v", err)
+	}
+
+	cfg, err := Load(ws)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	want := []string{"terraform plan"}
+	if !reflect.DeepEqual(cfg.ShellAllow, want) {
+		t.Fatalf("ShellAllow = %#v, want %#v", cfg.ShellAllow, want)
+	}
+}
