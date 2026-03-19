@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/mikoto2000/codew/internal/checkpoint"
+	"github.com/mikoto2000/codew/internal/codewconfig"
 	"github.com/mikoto2000/codew/internal/logging"
 	"github.com/mikoto2000/codew/internal/mcp"
 	"github.com/mikoto2000/codew/internal/modelprofile"
@@ -62,6 +63,10 @@ func Prepare(cmdFlagChanged func(string) bool, opts ExecuteOptions) (ExecuteDeps
 	profile := tools.NormalizeProfile(opts.ToolProfile)
 	sandbox := tools.NormalizeSandboxMode(opts.SandboxMode)
 	project := projectdetect.Detect(workspaceAbs)
+	cfg, err := codewconfig.Load(workspaceAbs)
+	if err != nil {
+		return ExecuteDeps{}, nil, fmt.Errorf("load config: %w", err)
+	}
 	client := ollama.NewClient(opts.ChatHost, opts.Timeout)
 	mcpManager := mcp.NewManager()
 	if opts.MCPEnabled {
@@ -78,7 +83,7 @@ func Prepare(cmdFlagChanged func(string) bool, opts ExecuteOptions) (ExecuteDeps
 		}
 	}
 
-	executor, err := tools.NewExecutor(workspaceAbs, profile, opts.DryRun, sandbox, mcpManager)
+	executor, err := tools.NewExecutor(workspaceAbs, profile, opts.DryRun, sandbox, mcpManager, cfg.ShellAllow)
 	if err != nil {
 		cleanup()
 		return ExecuteDeps{}, nil, err

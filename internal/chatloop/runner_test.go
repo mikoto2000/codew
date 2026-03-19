@@ -114,7 +114,7 @@ func TestRunnerCreatesCheckpointBeforeMutatingTool(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(ws, "a.txt"), []byte("old\n"), 0o644); err != nil {
 		t.Fatalf("seed file: %v", err)
 	}
-	exec, err := tools.NewExecutor(ws, tools.ProfileWorkspaceWrite, false, tools.SandboxWorkspaceWrite, nil)
+	exec, err := tools.NewExecutor(ws, tools.ProfileWorkspaceWrite, false, tools.SandboxWorkspaceWrite, nil, nil)
 	if err != nil {
 		t.Fatalf("NewExecutor: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestRunnerCreatesCheckpointBeforeMutatingTool(t *testing.T) {
 
 func TestRunnerRunsPostValidateAfterMutatingTool(t *testing.T) {
 	ws := t.TempDir()
-	exec, err := tools.NewExecutor(ws, tools.ProfileWorkspaceWrite, false, tools.SandboxWorkspaceWrite, nil)
+	exec, err := tools.NewExecutor(ws, tools.ProfileWorkspaceWrite, false, tools.SandboxWorkspaceWrite, nil, nil)
 	if err != nil {
 		t.Fatalf("NewExecutor: %v", err)
 	}

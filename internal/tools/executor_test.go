@@ -10,7 +10,7 @@ import (
 
 func TestApplyPatchCheckOnly(t *testing.T) {
 	ws := initGitWorkspace(t)
-	exec, err := NewExecutor(ws, ProfileFull, false, SandboxFull, nil)
+	exec, err := NewExecutor(ws, ProfileFull, false, SandboxFull, nil, nil)
 	if err != nil {
 		t.Fatalf("NewExecutor: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestApplyPatchCheckOnly(t *testing.T) {
 
 func TestApplyPatchApply(t *testing.T) {
 	ws := initGitWorkspace(t)
-	exec, err := NewExecutor(ws, ProfileFull, false, SandboxFull, nil)
+	exec, err := NewExecutor(ws, ProfileFull, false, SandboxFull, nil, nil)
 	if err != nil {
 		t.Fatalf("NewExecutor: %v", err)
 	}

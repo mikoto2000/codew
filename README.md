@@ -210,6 +210,7 @@ index 1111111..2222222 100644
 - `--auto-save=true` の場合、各ターン後に `--session-file` へ履歴を保存します。
 - `--resume` を指定すると起動時に `--session-file` を読み込みます。
 - チャット中でも `/save` と `/load` で明示的に保存・復元できます。
+- 起動時の `host` / `model` 未指定時は、前回保存した値を優先します。
 
 ## Context Compression
 
@@ -227,6 +228,21 @@ index 1111111..2222222 100644
 - `shell_exec` は `pty=true` を指定すると擬似TTYでコマンド実行します。
 - 対話系ツールやTTY前提のコマンドで利用できます。
 - `shell_exec` は安全側のデフォルトとして、`git status`, `git diff`, `go test`, `rg` などの許可コマンドに限定されます。
+- プロジェクトごとに `.codew/config.json` の `shell_allow` で allowlist を追加できます。
+
+設定例 (`.codew/config.json`):
+
+```json
+{
+  "shell_allow": [
+    "terraform plan",
+    "docker compose ps",
+    "make deploy"
+  ]
+}
+```
+
+`shell_allow` はデフォルト allowlist に追記されます。上書きではありません。
 
 ## Post-edit Validation
 

@@ -14,24 +14,26 @@ import (
 const maxOutputChars = 12000
 
 type Executor struct {
-	workspace string
-	profile   string
-	dryRun    bool
-	mcp       *mcp.Manager
-	sandbox   string
+	workspace  string
+	profile    string
+	dryRun     bool
+	mcp        *mcp.Manager
+	sandbox    string
+	shellAllow []string
 }
 
-func NewExecutor(workspace string, profile string, dryRun bool, sandboxMode string, mcpManager *mcp.Manager) (*Executor, error) {
+func NewExecutor(workspace string, profile string, dryRun bool, sandboxMode string, mcpManager *mcp.Manager, shellAllow []string) (*Executor, error) {
 	abs, err := filepath.Abs(workspace)
 	if err != nil {
 		return nil, fmt.Errorf("resolve workspace: %w", err)
 	}
 	return &Executor{
-		workspace: abs,
-		profile:   NormalizeProfile(profile),
-		dryRun:    dryRun,
-		mcp:       mcpManager,
-		sandbox:   NormalizeSandboxMode(sandboxMode),
+		workspace:  abs,
+		profile:    NormalizeProfile(profile),
+		dryRun:     dryRun,
+		mcp:        mcpManager,
+		sandbox:    NormalizeSandboxMode(sandboxMode),
+		shellAllow: append([]string(nil), shellAllow...),
 	}, nil
 }
 

@@ -67,13 +67,13 @@ func AllowedToolNamesForProfile(profile string) map[string]struct{} {
 	return out
 }
 
-func CheckShellCommandAllowed(profile, command string) error {
+func CheckShellCommandAllowed(profile, command string, extraAllow []string) error {
 	profile = NormalizeProfile(profile)
 	fields := strings.Fields(strings.TrimSpace(command))
 	if len(fields) == 0 {
 		return fmt.Errorf("command is required")
 	}
-	for _, allowed := range shellCommandAllowlist(profile) {
+	for _, allowed := range shellCommandAllowlist(profile, extraAllow) {
 		if hasPrefix(fields, allowed) {
 			return nil
 		}
@@ -81,10 +81,10 @@ func CheckShellCommandAllowed(profile, command string) error {
 	return fmt.Errorf("shell_exec command is not allowed in profile %q: %s", profile, fields[0])
 }
 
-func shellCommandAllowlist(profile string) [][]string {
+func shellCommandAllowlist(profile string, extraAllow []string) [][]string {
 	switch NormalizeProfile(profile) {
 	case ProfileFull:
-		return [][]string{
+		out := [][]string{
 			{"pwd"},
 			{"ls"},
 			{"find"},
@@ -96,6 +96,7 @@ func shellCommandAllowlist(profile string) [][]string {
 			{"git", "diff"},
 			{"git", "show"},
 			{"git", "log"},
+			{"make"},
 			{"go", "test"},
 			{"go", "fmt"},
 			{"go", "vet"},
@@ -106,6 +107,14 @@ func shellCommandAllowlist(profile string) [][]string {
 			{"cargo", "test"},
 			{"pytest"},
 		}
+		for _, raw := range extraAllow {
+			fields := strings.Fields(strings.TrimSpace(raw))
+			if len(fields) == 0 {
+				continue
+			}
+			out = append(out, fields)
+		}
+		return out
 	default:
 		return nil
 	}
